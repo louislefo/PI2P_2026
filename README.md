@@ -76,15 +76,15 @@ docker-compose up --build -d
 
 Le tableau de bord:  
 
-![alt text](.documents\image_readme\TDB.png)
+![Tableau de bord](.documents/image_readme/TDB.png)
 
 La base de données:  
 
-![alt text](.documents\image_readme\basededonnées.png)
+![base de données](.documents/image_readme/basededonnées.png)
 
 Le Journal d'activité:  
 
-![alt text](.documents\image_readme\Historique.png)
+![Journal d'activité](.documents/image_readme/Historique.png)
 
 
 ---
