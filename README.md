@@ -70,5 +70,22 @@ Le projet est prêt pour le déploiement industriel via Docker Compose sur Raspb
 docker-compose up --build -d
 ```
 
+
+
+# Screenshots
+
+Le tableau de bord:  
+
+![alt text](.documents\image_readme\TDB.png)
+
+La base de données:  
+
+![alt text](.documents\image_readme\basededonnées.png)
+
+Le Journal d'activité:  
+
+![alt text](.documents\image_readme\Historique.png)
+
+
 ---
 *Projet réalisé dans le cadre de l'A3 PI2P à l'ESILV par le Groupe 3309.*

@@ -109,6 +109,21 @@ def delete_history(log_id):
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
+        
+        # 1. Récupérer le nom de l'image avant de supprimer le record
+        c.execute('SELECT image_filename FROM history WHERE id = ?', (log_id,))
+        row = c.fetchone()
+        
+        if row and row[0]:
+            img_path = os.path.join("Data/historique_voiture_entree", row[0])
+            if os.path.exists(img_path):
+                try:
+                    os.remove(img_path)
+                    print(f"🗑️ [FILE] Image supprimée : {row[0]}")
+                except Exception as fe:
+                    print(f"⚠️ [FILE] Impossible de supprimer {row[0]}: {fe}")
+
+        # 2. Supprimer de la DB
         c.execute('DELETE FROM history WHERE id = ?', (log_id,))
         conn.commit()
         conn.close()
