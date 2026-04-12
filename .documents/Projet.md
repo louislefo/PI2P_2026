@@ -1,154 +1,64 @@
-Architecture Portail Automatique (Docker + React + FastAPI)Cette version utilise une séparation stricte entre le traitement d'image, le contrôle matériel et l'interface utilisateur.  
-1. Stack TechniqueIA : 
-   - YOLOv8 Nano (exporté en format ONNX pour le Pi 4).
-   - Backend : FastAPI (Asynchrone, idéal pour le streaming vidéo).
-   - Frontend : React + Tailwind CSS + Lucide Icons (Interface moderne).
-   - Conteneurisation : Docker + Docker Compose.
-   - Communication : WebSockets pour les alertes de plaques en temps réel.2. Structure du Projet/portail-project  
+# 📑 Dossier Technique - IA Parking Command Center
 
-```
-├── docker-compose.yml
-├── config/
-│   └── settings.json        # Pins GPIO et plaques autorisées
-├── backend/
-│   ├── Dockerfile
-│   ├── main.py              # API et Logique
-│   ├── processor.py         # Thread IA
-│   └── requirements.txt
-└── frontend/
-    ├── Dockerfile
-    └── App.jsx              # Application React (Dashboard)
-```
+Ce document détaille l'architecture logicielle et matérielle du système de gestion de parking intelligent du Groupe 3309 (ESILV 2026).
 
-1. Déploiement Docker Composeversion: '3.8'
-```docker-compose
-services:
-  api:
-    build: ./backend
-    privileged: true
-    volumes:
-      - ./config:/app/config
-      - /dev:/dev
-    ports:
-      - "8000:8000"
-    restart: always
+## 1. Stack Technologique (v2.0)
 
-  dashboard:
-    build: ./frontend
-    ports:
-      - "80:80"
-    environment:
-      - VITE_API_URL=http://[IP_DU_PI]:8000
-    restart: always
-```
+- **Vision** : YOLOv8 Nano ( ultralytics ) + EasyOCR.
+- **Backend** : FastAPI (Python 3.11).
+- **Frontend** : React.js + Vite + Tailwind CSS + Lucide Icons.
+- **Stockage** : SQLite 3 (Centralisé dans `backend/Data/pi2p.db`).
+- **Hardware** : GPIOZero (Controlleur Relai + Bouton).
 
-1. Optimisation Pi 4
-   - Mémoire : On utilise zram sur le Pi pour augmenter virtuellement la RAM.
-   - CPU : L'inférence IA est limitée à 2-3 FPS pour la détection de plaques, ce qui suffit largement pour un portail et évite la surchauffe.
-   - GPU : Utilisation de v4l2 pour l'accès direct à la caméra.
+## 2. Architecture de la Base de Données
 
+Le système est passé d'un stockage JSON vers un schéma SQL unifié pour garantir l'intégrité des données et permettre des requêtes complexes :
 
-### Backend : FastAPI + YOLOv8 Nano + ONNX + WebSockets   
-exemple :
+- **Table `authorized_plates`** : 
+    - `plate` (PK) : La plaque normalisée.
+    - `owner_name` : Nom du titulaire.
+    - `email` : Contact pour notifications.
+    - `created_at` / `valid_until` : Gestion de la temporalité des accès.
+- **Table `history`** : 
+    - Journal complet des passages (Horodatage, Plaque, Statut d'accessibilité, Référence image).
 
-```python
-import cv2
-import json
-import asyncio
-from fastapi import FastAPI, WebSocket, HTTPException
-from fastapi.responses import StreamingResponse
-from ultralytics import YOLO
-from gpiozero import OutputDevice
-import threading
-import time
+## 3. Logique de Vision & OCR
 
-app = FastAPI()
+Le `VisionProcessor` tourne en tâche de fond (`threading.Thread`) pour ne pas ralentir l'API.
 
-# 1. Chargement de la Configuration Dynamique
-try:
-    with open('/app/config/settings.json', 'r') as f:
-        config = json.load(f)
-except Exception:
-    config = {
-        "pins": {"motor_open": 17, "motor_close": 27},
-        "authorized_plates": ["AA-123-BB"]
-    }
+### Pipeline de détection :
+1. **YOLO Inférence** : On filtre sur les IDs configurés (Car=2, Person=0, etc.).
+2. **Filtrage Intelligent** : L'IA dessine les cadres de tous les objets, mais déclenche l'OCR uniquement sur les véhicules (`[2, 3, 5, 7]`).
+3. **Optimisation OCR** :
+    - Découpe de la zone du véhicule.
+    - Passage en noir et blanc (Grayscale) + Seuil adaptatif.
+    - Export debug dans `backend/data/debug_ocr`.
+4. **Fuzzy Matching** : Comparaison entre le texte lu et la DB via `difflib.get_close_matches` avec un seuil de 0.6.
 
-# 2. Initialisation GPIO
-# Note: Sur PC, gpiozero peut utiliser un mock si les pins ne sont pas trouvées
-motor_open = OutputDevice(config['pins']['motor_open'])
-motor_close = OutputDevice(config['pins']['motor_close'])
+## 4. Système de Surcharge Hardware (Override)
 
-# 3. Initialisation IA (YOLOv8)
-# Utiliser .onnx pour de meilleures performances sur Pi 4
-model = YOLO('yolov8n.pt') 
+Une innovation majeure de cette version est la gestion des modes de barrière via `settings.json` :
 
-# 4. Global State
-camera = cv2.VideoCapture(0)
-last_detected_plate = None
+| Mode | État Relai | Logique IA | Sécurité |
+| :--- | :--- | :--- | :--- |
+| **Auto** | Impulsionnel | Active | Standard |
+| **Always Open** | BLOQUÉ ON | Désactivée | Événementiel |
+| **Always Closed** | BLOQUÉ OFF | Désactivée | Sécurité Maximale |
 
-def alpr_worker():
-    """ Thread séparé pour ne pas bloquer le flux vidéo principal """
-    global last_detected_plate
-    while True:
-        success, frame = camera.read()
-        if not success:
-            time.sleep(1)
-            continue
-        
-        # Inférence légère (on resize l'image pour aller plus vite)
-        # On ne traite qu'une frame sur 10 pour économiser le CPU
-        results = model(frame, imgsz=320, conf=0.6, verbose=False)
-        
-        for r in results:
-            # Ici on filtre les classes (la classe 'license plate' dépend de ton modèle)
-            # Si détection, on déclenche l'ouverture
-            pass
-        
-        time.sleep(0.1)
+> [!TIP]
+> Lorsque le mode est forcé (`Open`/`Lock`), le `VisionProcessor` court-circuite l'OCR pour économiser 80% des ressources CPU du Raspberry Pi.
 
-# Lancement du worker IA
-threading.Thread(target=alpr_worker, daemon=True).start()
+## 5. Interface de Commande (Frontend)
 
-# 5. Endpoints API
-@app.get("/video_feed")
-async def video_feed():
-    def gen_frames():
-        while True:
-            success, frame = camera.read()
-            if not success:
-                break
-            _, buffer = cv2.imencode('.jpg', frame)
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-    return StreamingResponse(gen_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+L'UI a été architecturé pour ressembler à un poste de sécurité industriel :
+- **Sidebar Réductible** : Optimisation de l'espace de surveillance.
+- **AppRouter** : Séparation stricte de la logique de routage pour une maintenance facilitée.
+- **Feedback Temps Réel** : WebSockets pour recevoir l'état du capteur magnétique (porte) et les nouvelles entrées sans recharger la page.
 
-@app.post("/gate/{action}")
-async def control_gate(action: str):
-    if action == "open":
-        motor_close.off()
-        motor_open.on()
-        return {"status": "opening"}
-    elif action == "close":
-        motor_open.off()
-        motor_close.on()
-        return {"status": "closing"}
-    elif action == "stop":
-        motor_open.off()
-        motor_close.off()
-        return {"status": "stopped"}
-    else:
-        raise HTTPException(status_code=400, detail="Action invalide")
+## 6. Déploiement & Sécurité
 
-@app.get("/status")
-async def get_status():
-    return {
-        "motor_open": motor_open.value,
-        "motor_close": motor_close.value,
-        "config": config
-    }
+### Dockerization :
+Le projet utilise Docker Compose pour isoler les services. Le volume `/config` permet de persister les réglages et la base de données SQLite en dehors des conteneurs éphémères.
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-```
+### Hardware : 
+Le système détecte l'OS hôte. Sur Windows, un `MockDevice` est utilisé pour simuler le comportement des pins GPIO, permettant le développement sans matériel.

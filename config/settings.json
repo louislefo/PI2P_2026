@@ -1,8 +1,14 @@
 {
-  "camera_source": 0,
-  "door_relay_pin": 17,
-  "door_sensor_pin": 27,
-  "authorized_plates": ["GV-179-DS", "GP-526-PE"],
-  "yolo_model_path": "yolov8n.pt",
-  "confidence_threshold": 0.5
+    "camera_source": 0,
+    "door_relay_pin": 17,
+    "door_sensor_pin": 27,
+    "yolo_model_path": "yolov8n.pt",
+    "confidence_threshold": 0.5,
+    "entry_code": "2635#",
+    "gate_mode": "auto",
+    "detection_objects": [
+        "car",
+        "bicycle",
+        "person"
+    ]
 }

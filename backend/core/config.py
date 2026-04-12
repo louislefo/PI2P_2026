@@ -1,22 +1,70 @@
 import os
 import json
 from datetime import datetime
+import sqlite3
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "../config/settings.json")
-HISTORY_PATH = os.environ.get("HISTORY_PATH", "../config/history.json")
+DB_PATH = os.environ.get("DB_PATH", "Data/pi2p.db")
+
+def init_db():
+    os.makedirs("Data", exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # Historique
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plate TEXT,
+            time TEXT,
+            status TEXT,
+            image_filename TEXT
+        )
+    ''')
+    
+    # Plaques Autorisées
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS authorized_plates (
+            plate TEXT PRIMARY KEY,
+            owner_name TEXT,
+            email TEXT,
+            created_at TEXT,
+            valid_until TEXT
+        )
+    ''')
+    conn.commit()
+    
+    # Migration des plaques depuis le JSON s'il y en a et que la table est vide
+    c.execute('SELECT COUNT(*) FROM authorized_plates')
+    if c.fetchone()[0] == 0:
+        cfg = load_config()
+        old_plates = cfg.get("authorized_plates", [])
+        for p in old_plates:
+            c.execute('INSERT OR IGNORE INTO authorized_plates (plate, created_at) VALUES (?, ?)', (p, datetime.now().isoformat()))
+        conn.commit()
+        
+    conn.close()
 
 def load_config():
     try:
         with open(CONFIG_PATH, "r") as f:
-            return json.load(f)
+            cfg = json.load(f)
+            # Ajout des valeurs par défaut si elles sont manquantes dans le JSON
+            if "entry_code" not in cfg: cfg["entry_code"] = "0000#"
+            if "gate_mode" not in cfg: cfg["gate_mode"] = "auto"
+            if "detection_objects" not in cfg: cfg["detection_objects"] = ["car"]
+            return cfg
     except Exception as e:
         print("Erreur de config:", e)
         return {
             "camera_source": 0,
             "door_relay_pin": 17,
             "door_sensor_pin": 27,
-            "authorized_plates": [],
-            "yolo_model_path": "yolov8n.pt"
+            "yolo_model_path": "yolov8n.pt",
+            "confidence_threshold": 0.5,
+            "entry_code": "0000#",
+            "gate_mode": "auto",
+            "detection_objects": ["car"]
         }
 
 def save_config(cfg):
@@ -28,26 +76,89 @@ def save_config(cfg):
         print("Erreur sauvegarde config:", e)
         return False
 
-def load_history():
+def load_history(limit=50):
     try:
-        with open(HISTORY_PATH, "r") as f:
-            return json.load(f)
-    except Exception:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute('SELECT id, plate, time, status, image_filename FROM history ORDER BY time DESC LIMIT ?', (limit,))
+        rows = c.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    except Exception as e:
+        print("Erreur chargement SQLite:", e)
         return []
 
-def add_history(plate, status="Autorisé"):
-    hist = load_history()
-    entry = {"plate": plate, "time": datetime.now().isoformat(), "status": status}
-    hist.insert(0, entry)
-    
-    # Garder seulement les 50 derniers passages pour éviter un fichier trop gros
-    if len(hist) > 50:
-        hist = hist[:50]
-        
+def add_history(plate, status="Autorisé", image_filename=None):
+    time_str = datetime.now().isoformat()
     try:
-        with open(HISTORY_PATH, "w") as f:
-            json.dump(hist, f, indent=4)
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute('''
+            INSERT INTO history (plate, time, status, image_filename)
+            VALUES (?, ?, ?, ?)
+        ''', (plate, time_str, status, image_filename))
+        conn.commit()
+        conn.close()
     except Exception as e:
-        print("Erreur sauvegarde historique:", e)
+        print("Erreur sauvegarde SQLite:", e)
         
-    return entry
+    return {"plate": plate, "time": time_str, "status": status, "image_filename": image_filename}
+
+def delete_history(log_id):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute('DELETE FROM history WHERE id = ?', (log_id,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("Erreur delete_history SQLite:", e)
+        return False
+
+# ----- Gestion des Plaques en Base de Données -----
+
+def get_authorized_plates():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute('SELECT plate, owner_name, email, created_at, valid_until FROM authorized_plates')
+        rows = c.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    except Exception as e:
+        print("Erreur get_authorized_plates SQLite:", e)
+        return []
+
+def add_plate_to_db(plate, owner_name=None, email=None, valid_until=None):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        created_at = datetime.now().isoformat()
+        c.execute('''
+            INSERT OR REPLACE INTO authorized_plates (plate, owner_name, email, created_at, valid_until)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (plate.upper().strip(), owner_name, email, created_at, valid_until))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("Erreur add_plate_to_db SQLite:", e)
+        return False
+
+def delete_plate_from_db(plate):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute('DELETE FROM authorized_plates WHERE plate = ?', (plate.upper().strip(),))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("Erreur delete_plate_from_db SQLite:", e)
+        return False
+
+# Initialiser la DB au premier chargement global (après les définitions)
+init_db()
