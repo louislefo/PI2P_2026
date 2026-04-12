@@ -1,21 +1,117 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════
+   DESIGN TOKENS — Industrial Command & Control
+   Following the "Vigilant Architect" design system (design.md)
+   ═══════════════════════════════════════════════════════════ */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* ── Surface Hierarchy (Physical Stacking Model) ── */
+    --surface:                    #faf8ff;   /* Level 0 — The floor */
+    --surface-dim:                #dad8e0;
+    --surface-container-lowest:   #ffffff;   /* Floating islands */
+    --surface-container-low:      #f4f2fa;   /* Level 1 — Secondary sidebars */
+    --surface-container:          #efedf5;
+    --surface-container-high:     #e9e7ef;   /* Level 2 — Video frames, tables */
+    --surface-container-highest:  #e3e1e9;   /* Level 3 — Modals, active alerts */
+    --inverse-surface:            #283044;
+    --inverse-on-surface:         #f0f0f8;
+
+    /* ── Primary (Action) ── */
+    --primary:                    #002e78;
+    --primary-container:          #0043a7;
+    --on-primary:                 #ffffff;
+    --on-primary-container:       #d8e2ff;
+    --primary-fixed:              #d8e2ff;
+    --primary-fixed-dim:          #adc6ff;
+
+    /* ── Secondary ── */
+    --secondary:                  #565e71;
+    --secondary-container:        #dae2f9;
+    --on-secondary:               #ffffff;
+
+    /* ── Tertiary (Warm/Safety) ── */
+    --tertiary:                   #572500;
+    --tertiary-container:         #ffdbd0;
+
+    /* ── Error ── */
+    --error:                      #ba1a1a;
+    --error-container:            #ffdad6;
+    --on-error:                   #ffffff;
+
+    /* ── Success ── */
+    --success:                    #006d3b;
+    --success-container:          #c8f5d4;
+    --on-success:                 #ffffff;
+
+    /* ── Text ── */
+    --on-surface:                 #131b2e;  /* NEVER pure black */
+    --on-surface-variant:         #44474f;
+
+    /* ── Outline ── */
+    --outline:                    #74777f;
+    --outline-variant:            #c4c6d0;
+
+    /* ── Typography Scale ── */
+    --display-md:                 2.75rem;
+    --headline-sm:                1.5rem;
+    --body-md:                    0.875rem;
+    --label-sm:                   0.6875rem;
+
+    /* ── Spacing ── */
+    --breathing-room:             32px;
+    --breathing-room-sm:          24px;
+
+    /* ── Radii ── */
+    --radius-lg:                  0.5rem;    /* Video frames */
+    --radius-md:                  0.375rem;  /* Buttons */
+    --radius-full:                9999px;    /* Pills, circles */
+
+    /* ── Transitions ── */
+    --transition-fast:            150ms ease;
+    --transition-base:            200ms ease;
+    --transition-slow:            300ms ease;
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
   }
-}
 
-body {
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
-  margin: 0;
-  min-height: 100vh;
+  body {
+    background-color: var(--surface);
+    color: var(--on-surface);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: var(--body-md);
+    line-height: 1.5;
+  }
+
+  /* Custom Scrollbar — Minimal */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--outline-variant);
+    border-radius: var(--radius-full);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--outline);
+  }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
