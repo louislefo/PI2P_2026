@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  api:
+    build: ./backend
+    privileged: true
+    volumes:
+      - ./config:/app/config
+      - /dev:/dev
+    ports:
+      - "8000:8000"
+    restart: always
+
+  dashboard:
+    build: ./frontend
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    restart: always
