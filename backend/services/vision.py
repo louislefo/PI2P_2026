@@ -4,8 +4,9 @@ import time
 import requests
 import re
 from ultralytics import YOLO
-from core.config import load_config
+from core.config import load_config, get_authorized_plates
 import logging
+from datetime import datetime
 
 # On coupe les logs inutiles d'easyocr
 logging.getLogger("easyocr").setLevel(logging.ERROR)
@@ -36,6 +37,16 @@ class VisionProcessor:
             self.reader = None
             
         self.last_ocr_time = 0
+        
+        # Mappage des IDs COCO pour les objets funs
+        self.coco_mapping = {
+            "person": 0, "bicycle": 1, "car": 2, "motorcycle": 3, 
+            "bus": 5, "truck": 7, "dog": 16, "cat": 15
+        }
+
+    def update_config(self):
+        self.config = load_config()
+        print("⚙️ [VISION] Configuration rafraîchie.")
 
     def start(self):
         if not self.running:
@@ -51,29 +62,41 @@ class VisionProcessor:
     def update_config(self):
         self.config = load_config()
 
-    def _trigger_access(self, plate):
+    def _trigger_access(self, plate, image_filename=None):
         try:
             # On demande au router d'ouvrir la porte et de faire l'historique
-            requests.post("http://127.0.0.1:8000/api/system/access", json={"plate": plate})
+            requests.post("http://127.0.0.1:8000/api/system/access", json={"plate": plate, "image_filename": image_filename})
         except Exception as e:
             print(f"⚠️ Erreur déclenchement trigger: {e}")
 
     def _process_plate(self, raw_text):
+        cfg = load_config()
+        if cfg.get("gate_mode", "auto") != "auto":
+            print("⏳ [VISION] OCR ignoré : Le portail est en sur-régime (Ouvert/Bloqué)")
+            return False
+            
         # Nettoyage : Retire les espaces et autres caractères louches
         text = re.sub(r'[^A-Z0-9]', '', raw_text.upper())
         if len(text) < 4: return False
         
         print(f"\n🔍 [OCR] Texte brut lu sur la plaque : '{raw_text}' -> Formaté : '{text}'")
         
-        plates = self.config.get("authorized_plates", [])
-        normalized_plates = [re.sub(r'[^A-Z0-9]', '', p.upper()) for p in plates]
+        plates = get_authorized_plates()
+        now = datetime.now().isoformat()
         
-        if text in normalized_plates:
+        # Filtre les plaques expirées
+        valid_plates = []
+        for p in plates:
+            if p['valid_until'] and p['valid_until'] < now:
+                continue
+            valid_plates.append(re.sub(r'[^A-Z0-9]', '', p['plate'].upper()))
+            
+        if text in valid_plates:
             print(f"✅ [ACCÈS AUTORISÉ] La plaque '{text}' est enregistrée ! Ouverture du Portail...")
             threading.Thread(target=self._trigger_access, args=(text,), daemon=True).start()
             return True
         else:
-            print(f"❌ [ACCÈS REFUSÉ] La plaque '{text}' n'est pas connue du système.")
+            print(f"❌ [ACCÈS REFUSÉ] La plaque '{text}' n'est pas connue du système ou est expirée.")
             
         return False
 
@@ -92,30 +115,38 @@ class VisionProcessor:
             
             annotated_frame = frame.copy()
             if self.model:
-                # 0 = humain, 1 = velo, 2 = voiture
-                results = self.model(frame, classes=[0, 1, 2], verbose=False) 
+                # Déterminer les IDs à scanner (Voiture par défaut + les funs choisis)
+                selected_objects = self.config.get("detection_objects", ["car"])
+                target_ids = [self.coco_mapping.get(obj) for obj in selected_objects if obj in self.coco_mapping]
+                
+                # YOLO - ON RESTREINT LE CLASSIFICATEUR EXACTEMENT AUX ID DEMANDES
+                results = self.model(frame, classes=target_ids, verbose=False) 
                 annotated_frame = results[0].plot()
                 
                 # --- LANCEMENT OCR INTELLIGENT ---
                 current_time = time.time()
+                
                 # On limite l'OCR à 1 fois toutes les 2 secondes pour éviter le lag video
-                if self.reader and (current_time - self.last_ocr_time > 2.0):
+                # Et on bypass si le portail est forcé.
+                cfg = load_config()
+                if self.reader and (current_time - self.last_ocr_time > 2.0) and cfg.get("gate_mode", "auto") == "auto":
                     boxes = results[0].boxes
                     for box in boxes:
                         cls_id = int(box.cls[0])
-                        if cls_id == 2:  # Filtre OCR : On ne scanne la plaque QUE sur les voitures (2)
+                        # L'OCR ne se lance QUE sur les véhicules porteurs de plaques probables
+                        if cls_id in [2, 3, 5, 7]: # 2=car, 3=motorcycle, 5=bus, 7=truck
                             x1, y1, x2, y2 = map(int, box.xyxy[0])
                             
-                            # On passe la voiture ENTIÈRE à l'OCR pour ne pas risquer de couper la plaque au montage
+                            # On passe la voiture ENTIÈRE à l'OCR
                             roi_y1 = y1
                             car_roi = frame[y1:y2, x1:x2]
                             
                             if car_roi.shape[0] > 10 and car_roi.shape[1] > 10: 
-                                print("🚗 [INFO] Voiture détectée ! Tentative de lecture de plaque...")
+                                obj_name = "Voiture" if cls_id == 2 else "Moto/Camion"
+                                print(f"🚙 [INFO] {obj_name} détectée ! Tentative de lecture de plaque...")
                                 
-                                # -- LIGNE DE DEBUG : Sauvegarder l'historique brut --
                                 import os
-                                os.makedirs("debug_ocr", exist_ok=True)
+                                os.makedirs("data/debug_ocr", exist_ok=True)
                                 
                                 # AMÉLIORATION OCR : Traitement d'image pour aider EasyOCR
                                 # 1. Passage en niveaux de gris
@@ -125,11 +156,12 @@ class VisionProcessor:
                                 enlarged = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
                                 
                                 # 3. Filtre de contraste (Optionnel, on essaye d'abord juste le zoom+gris)
-                                cv2.imwrite(f"debug_ocr/roi_{int(current_time)}.jpg", enlarged)
+                                cv2.imwrite(f"data/debug_ocr/roi_{int(current_time)}.jpg", enlarged)
                                 
-                                # 4. OCR DANS UN THREAD (Pour ne jamais bloquer la vidéo)
-                                self.last_ocr_time = current_time # Verrouillage immédiat pour ne pas lancer 100 threads
-                                threading.Thread(target=self._run_ocr_thread, args=(enlarged, x1, roi_y1, annotated_frame.copy()), daemon=True).start()
+                                # OCR DANS UN THREAD (Pour ne jamais bloquer la vidéo)
+                                # On passe le car_roi couleur pour le sauvegarder plus tard dans l'historique
+                                self.last_ocr_time = current_time
+                                threading.Thread(target=self._run_ocr_thread, args=(enlarged, car_roi.copy(), current_time), daemon=True).start()
                                 break
                     self.last_ocr_time = max(self.last_ocr_time, current_time)
 
@@ -143,11 +175,11 @@ class VisionProcessor:
         if cap:
             cap.release()
             
-    def _run_ocr_thread(self, image, x, y, debug_frame):
+    def _run_ocr_thread(self, enlarged_img, color_roi, current_time):
         import difflib
         
         allowed_chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'
-        ocr_results = self.reader.readtext(image, allowlist=allowed_chars)
+        ocr_results = self.reader.readtext(enlarged_img, allowlist=allowed_chars)
         plate_found = False
         
         if len(ocr_results) == 0:
@@ -160,13 +192,20 @@ class VisionProcessor:
                 text = re.sub(r'[^A-Z0-9]', '', raw_text.upper())
                 if len(text) < 4: continue
                 
-                plates = self.config.get("authorized_plates", [])
-                normalized_plates = [re.sub(r'[^A-Z0-9]', '', p.upper()) for p in plates]
+                plates = get_authorized_plates()
+                now = datetime.now().isoformat()
+                
+                # Filtre les plaques expirées
+                valid_plates = []
+                for p in plates:
+                    if p['valid_until'] and p['valid_until'] < now:
+                        continue
+                    valid_plates.append(re.sub(r'[^A-Z0-9]', '', p['plate'].upper()))
                 
                 # FUZZY MATCHING : Accepte les fautes de frappe de l'OCR !
                 best_match = None
                 best_ratio = 0
-                for auth_plate in normalized_plates:
+                for auth_plate in valid_plates:
                     ratio = difflib.SequenceMatcher(None, text, auth_plate).ratio()
                     if ratio > best_ratio:
                         best_ratio = ratio
@@ -179,9 +218,18 @@ class VisionProcessor:
                 
                 if best_ratio >= score_minimum:
                     print(f"✅ [ACCÈS AUTORISÉ] La reconnaissance floue valide '{best_match}' ! Ouverture du Portail...")
+                    
+                    # Sauvegarde de l'image de l'historique
+                    import os
+                    history_dir = "Data/historique_voiture_entree"
+                    os.makedirs(history_dir, exist_ok=True)
+                    image_filename = f"{int(current_time)}_{best_match}.jpg"
+                    image_path = os.path.join(history_dir, image_filename)
+                    cv2.imwrite(image_path, color_roi)
+                    
                     # Update OCR delay because it's a match
                     self.last_ocr_time = time.time() + 10.0
-                    threading.Thread(target=self._trigger_access, args=(best_match,), daemon=True).start()
+                    threading.Thread(target=self._trigger_access, args=(best_match, image_filename), daemon=True).start()
                     plate_found = True
                     break
                 else:

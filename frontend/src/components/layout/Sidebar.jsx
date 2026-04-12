@@ -13,7 +13,7 @@ export default function Sidebar({ currentView, setCurrentView, collapsed, setCol
       {/* Logo / Title */}
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <Shield size={18} />
+          <img src="/ESILV_LOGO.png" alt="ESILV Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
         </div>
         <div className="sidebar-title">
           <h1>IA Parking</h1>
@@ -39,7 +39,8 @@ export default function Sidebar({ currentView, setCurrentView, collapsed, setCol
       {/* Footer */}
       <div className="sidebar-footer">
         <button
-          className="nav-item"
+          className={`nav-item ${currentView === 'settings' ? 'active' : ''}`}
+          onClick={() => setCurrentView('settings')}
           title={collapsed ? 'Paramètres' : undefined}
         >
           <Settings className="nav-icon" size={20} />

@@ -15,6 +15,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.staticfiles import StaticFiles
+import os
+
+os.makedirs("Data/historique_voiture_entree", exist_ok=True)
+app.mount("/api/images", StaticFiles(directory="Data/historique_voiture_entree"), name="images")
+
 # Enregistrement des routes propres
 app.include_router(config_router.router)
 app.include_router(system_router.router)

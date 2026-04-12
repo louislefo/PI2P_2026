@@ -32,9 +32,6 @@ export default function DashboardView({
       <div className="status-banner">
         <div className="status-main">
           <span className="status-label">État Actuel</span>
-          <span className="status-value">
-            {status.door_open ? 'ALERTE' : 'SÉCURISÉ'}
-          </span>
         </div>
         <div className={`portal-badge ${status.door_open ? 'open' : 'closed'}`}>
           <DoorOpen size={16} />
@@ -60,7 +57,7 @@ export default function DashboardView({
             {!videoError && (
               <div className="video-overlay-badge">
                 <span className="live-dot"></span>
-                <span>En Direct // {activeCam} + OCR</span>
+                <span>En Direct // {activeCam}</span>
               </div>
             )}
 
