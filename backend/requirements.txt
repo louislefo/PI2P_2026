@@ -1,7 +1,6 @@
 fastapi
 uvicorn[standard]
 ultralytics
-opencv-python-headless
 gpiozero
 pydantic
 easyocr
