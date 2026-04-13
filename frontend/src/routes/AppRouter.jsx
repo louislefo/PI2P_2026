@@ -42,6 +42,7 @@ export default function AppRouter({
       return (
         <LogsView 
           history={history}
+          plates={plates}
           API_BASE={API_BASE}
           deleteLog={deleteLog}
         />

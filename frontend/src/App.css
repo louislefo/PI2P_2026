@@ -1072,6 +1072,67 @@
   min-width: 120px;
 }
 
+.log-info {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.log-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--outline-variant);
+  opacity: 0.5;
+}
+
+.log-driver {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--on-surface-variant);
+  font-size: var(--label-sm);
+}
+
+.log-driver svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.log-driver-name {
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.log-driver-email {
+  color: var(--outline);
+  font-weight: 400;
+}
+
+.log-driver-email::before {
+  content: '·';
+  margin: 0 4px;
+}
+
+.delete-log-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--outline);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.delete-log-btn:hover {
+  background: var(--error-container);
+  color: var(--error);
+}
+
 .log-right {
   display: flex;
   align-items: center;
@@ -1086,6 +1147,121 @@
   padding: 4px 10px;
   border-radius: var(--radius-md);
 }
+
+.log-image-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--surface-container);
+  color: var(--primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.log-image-btn:hover {
+  background: var(--primary-fixed);
+  transform: translateY(-2px);
+}
+
+.log-image-btn.empty {
+  background: var(--surface-container-highest);
+  color: var(--outline);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ──────────────────────────────────────────
+   MODAL / POPUP
+   ────────────────────────────────────────── */
+.image-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(19, 27, 46, 0.8);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  animation: fadeIn var(--transition-base);
+}
+
+.image-modal-content {
+  background: var(--surface-container-lowest);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: slideUp var(--transition-base);
+}
+
+.modal-header {
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.modal-header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+.close-modal-icon {
+  background: transparent;
+  border: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: var(--radius-full);
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-modal-icon:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.modal-body {
+  padding: 24px;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000; /* Contrast for images */
+}
+
+.modal-body img {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 
 /* ──────────────────────────────────────────
    EMPTY STATE
