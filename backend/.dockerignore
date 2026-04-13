@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+data/
+Data/
+test_cam.py
+.git/
+.gitignore
+*.md

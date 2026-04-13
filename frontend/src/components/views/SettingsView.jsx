@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings2, KeyRound, Lock, Unlock, Zap, Save, Shield } from 'lucide-react';
+import { Settings2, KeyRound, Lock, Unlock, Zap, Save, Shield, Eye, EyeOff } from 'lucide-react';
 
 export default function SettingsView({ config, setConfig, API_BASE }) {
   // Extraction des valeurs de la config avec fallbacks
@@ -7,13 +7,14 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
   const initialMode = config.gate_mode || 'auto';
   const initialDetection = config.detection_objects || ['car'];
 
-  // États locaux du formulaire (Source de vérité locale)
+  // États locaux du formulaire
   const [localCode, setLocalCode] = useState(initialCode);
   const [localMode, setLocalMode] = useState(initialMode);
   const [localDetection, setLocalDetection] = useState(initialDetection);
+  const [showCode, setShowCode] = useState(false);
   const [savedStatus, setSavedStatus] = useState('');
 
-  // Synchronisation si la config change (ex: fetch initial)
+  // Synchronisation si la config change
   useEffect(() => {
     setLocalCode(config.entry_code || '0000#');
     setLocalMode(config.gate_mode || 'auto');
@@ -39,7 +40,6 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
 
       const data = await resp.json();
       if (data.status === 'success') {
-        // MAJ de l'état global de l'App uniquement après succès
         setConfig(data.settings); 
         setSavedStatus('Paramètres sauvegardés avec succès !');
         setTimeout(() => setSavedStatus(''), 3000);
@@ -120,13 +120,23 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
             </div>
             <div className="form-group pin-group">
               <label>PIN d'accès</label>
-              <input 
-                type="text" 
-                value={localCode} 
-                onChange={(e) => setLocalCode(e.target.value)} 
-                placeholder="Ex: 0302#"
-                className="pin-input"
-              />
+              <div className="pin-input-wrapper">
+                <input 
+                  type={showCode ? "text" : "password"} 
+                  value={localCode} 
+                  onChange={(e) => setLocalCode(e.target.value)} 
+                  placeholder="Ex: 0302#"
+                  className="pin-input"
+                />
+                <button 
+                  type="button" 
+                  className="pin-toggle"
+                  onClick={() => setShowCode(!showCode)}
+                  title={showCode ? "Masquer" : "Afficher"}
+                >
+                  {showCode ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
           </section>
 
@@ -138,13 +148,13 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
             </div>
             <div className="detection-grid">
               {[
-                { id: 'car', label: 'Voitures', icon: '🚗', locked: true },
-                { id: 'truck', label: 'Camions', icon: '🚛' },
-                { id: 'motorcycle', label: 'Motos', icon: '🏍️' },
-                { id: 'bicycle', label: 'Vélos', icon: '🚲' },
-                { id: 'person', label: 'Personnes', icon: '🚶' },
-                { id: 'dog', label: 'Chiens', icon: '🐕' },
-                { id: 'cat', label: 'Chats', icon: '🐈' }
+                { id: 'car', label: 'Voitures', locked: true },
+                { id: 'truck', label: 'Camions' },
+                { id: 'motorcycle', label: 'Motos' },
+                { id: 'bicycle', label: 'Vélos' },
+                { id: 'person', label: 'Personnes' },
+                { id: 'dog', label: 'Chiens' },
+                { id: 'cat', label: 'Chats' }
               ].map(obj => {
                 const isSelected = localDetection.includes(obj.id);
                 return (
@@ -153,7 +163,6 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
                     className={`detection-item ${isSelected ? 'selected' : ''} ${obj.locked ? 'locked' : ''}`}
                     onClick={() => toggleDetection(obj.id, obj.locked)}
                   >
-                    <span className="obj-icon">{obj.icon}</span>
                     <span className="obj-label">{obj.label}</span>
                   </div>
                 );

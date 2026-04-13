@@ -1535,7 +1535,7 @@
 .settings-content {
   display: flex;
   flex-direction: column;
-  max-width: 800px;
+  width: 100%;
   gap: 24px;
   padding-bottom: 40px;
 }
@@ -1648,13 +1648,41 @@
 }
 
 .pin-group {
-  max-width: 200px;
+  max-width: 300px;
+}
+
+.pin-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .pin-input {
+  width: 100%;
   font-size: 1.2rem !important;
   letter-spacing: 2px;
   font-family: monospace !important;
+  padding-right: 48px !important;
+}
+
+.pin-toggle {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.pin-toggle:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
 }
 
 .settings-footer {
@@ -1703,7 +1731,7 @@
 .detection-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
   padding: 12px 16px;
   background: var(--surface-container);
   border: 1px solid var(--outline);
@@ -1711,6 +1739,7 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   user-select: none;
+  text-align: center;
 }
 
 .detection-item input {

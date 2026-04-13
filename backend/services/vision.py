@@ -221,7 +221,7 @@ class VisionProcessor:
                     
                     # Sauvegarde de l'image de l'historique
                     import os
-                    history_dir = "Data/historique_voiture_entree"
+                    history_dir = "data/historique_voiture_entree"
                     os.makedirs(history_dir, exist_ok=True)
                     image_filename = f"{int(current_time)}_{best_match}.jpg"
                     image_path = os.path.join(history_dir, image_filename)
