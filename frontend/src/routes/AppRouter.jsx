@@ -16,7 +16,8 @@ export default function AppRouter({
   setConfig, 
   addPlate, 
   deletePlate, 
-  deleteLog 
+  deleteLog,
+  refreshPlates 
 }) {
   switch (currentView) {
     case 'dashboard':
@@ -36,6 +37,8 @@ export default function AppRouter({
           plates={plates}
           addPlate={addPlate}
           deletePlate={deletePlate}
+          API_BASE={API_BASE}
+          refreshPlates={refreshPlates}
         />
       );
     case 'logs':

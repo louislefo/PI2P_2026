@@ -1,20 +1,26 @@
-version: '3.8'
-
 services:
   api:
     build: ./backend
     privileged: true
+    devices:
+      - "/dev/video0:/dev/video0"
+      - "/dev/video1:/dev/video1"
+      - "/dev/media4:/dev/media4"
+      - "/dev/media5:/dev/media5"
     volumes:
       - ./config:/app/config
-      - /dev:/dev
+      - ./data:/app/data
     ports:
       - "8000:8000"
+    environment:
+      - CONFIG_PATH=config/settings.json
+      - DB_PATH=data/pi2p.db
     restart: always
 
   dashboard:
     build: ./frontend
     ports:
       - "80:80"
-    environment:
-      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - api
     restart: always

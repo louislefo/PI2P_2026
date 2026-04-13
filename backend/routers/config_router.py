@@ -1,6 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile, File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
+import csv
+import io
 from core.config import load_config, save_config, get_authorized_plates, add_plate_to_db, delete_plate_from_db
 from services.vision import processor
 
@@ -73,3 +76,50 @@ def delete_plate(plate: str):
         processor.update_config()
         
     return {"status": "success", "plates": get_authorized_plates()}
+
+@router.post("/plates/import-csv")
+async def import_plates_csv(file: UploadFile = File(...)):
+    """Import plates from a CSV file. Expected columns: plate, owner_name, email, valid_until"""
+    content = await file.read()
+    text = content.decode("utf-8-sig")  # utf-8-sig handles BOM from Excel
+    reader = csv.DictReader(io.StringIO(text), delimiter=";")
+    
+    imported = 0
+    errors = []
+    
+    for i, row in enumerate(reader, start=2):
+        plate = row.get("plate", "").strip().upper()
+        if not plate:
+            errors.append(f"Ligne {i}: plaque vide, ignorée")
+            continue
+        
+        owner_name = row.get("owner_name", "").strip() or None
+        email = row.get("email", "").strip() or None
+        valid_until = row.get("valid_until", "").strip() or None
+        
+        add_plate_to_db(plate, owner_name, email, valid_until)
+        imported += 1
+    
+    processor.update_config()
+    return {
+        "status": "success",
+        "imported": imported,
+        "errors": errors,
+        "plates": get_authorized_plates()
+    }
+
+@router.get("/plates/template-csv")
+def download_template_csv():
+    """Download a CSV template for bulk plate import"""
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(["plate", "owner_name", "email", "valid_until"])
+    writer.writerow(["AA-123-BB", "Jean Dupont", "jean@exemple.fr", "2026-12-31"])
+    writer.writerow(["CC-456-DD", "Marie Martin", "marie@exemple.fr", ""])
+    
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=modele_plaques.csv"}
+    )

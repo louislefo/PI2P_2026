@@ -3,11 +3,20 @@ import json
 from datetime import datetime
 import sqlite3
 
-CONFIG_PATH = os.environ.get("CONFIG_PATH", "../config/settings.json")
-DB_PATH = os.environ.get("DB_PATH", "Data/pi2p.db")
+def _resolve_path(env_var, docker_path, local_path):
+    """Résout le chemin : variable d'env > chemin Docker > chemin dev local."""
+    env_val = os.environ.get(env_var)
+    if env_val:
+        return env_val
+    if os.path.exists(docker_path) or os.path.exists(os.path.dirname(docker_path)):
+        return docker_path
+    return local_path
+
+CONFIG_PATH = _resolve_path("CONFIG_PATH", "config/settings.json", "../config/settings.json")
+DB_PATH = _resolve_path("DB_PATH", "data/pi2p.db", "data/pi2p.db")
 
 def init_db():
-    os.makedirs("Data", exist_ok=True)
+    os.makedirs("data", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
@@ -115,7 +124,7 @@ def delete_history(log_id):
         row = c.fetchone()
         
         if row and row[0]:
-            img_path = os.path.join("Data/historique_voiture_entree", row[0])
+            img_path = os.path.join("data/historique_voiture_entree", row[0])
             if os.path.exists(img_path):
                 try:
                     os.remove(img_path)

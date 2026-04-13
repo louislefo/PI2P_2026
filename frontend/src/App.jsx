@@ -160,6 +160,7 @@ function App() {
           addPlate={addPlate}
           deletePlate={deletePlate}
           deleteLog={deleteLog}
+          refreshPlates={fetchConfig}
         />
       </main>
     </div>
