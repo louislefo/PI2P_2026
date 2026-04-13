@@ -2,7 +2,7 @@ FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
-# Dépendances système pour OpenCV headless, EasyOCR et PyTorch sur ARM64
+# Dépendances système pour OpenCV headless, EasyOCR sur ARM64
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         libgl1 \
@@ -13,10 +13,16 @@ RUN apt-get update && \
         gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Variables d'environnement pour les chemins (overridables via docker-compose)
+# Variables d'environnement
 ENV CONFIG_PATH=config/settings.json
 ENV DB_PATH=data/pi2p.db
 
+# Étape 1 : Installer PyTorch CPU-ONLY (pas de CUDA, économise +1.5 Go)
+RUN pip install --no-cache-dir \
+    torch torchvision \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Étape 2 : Installer le reste des dépendances
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
