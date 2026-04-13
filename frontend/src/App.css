@@ -894,6 +894,93 @@
   transform: scale(0.97);
 }
 
+/* Filter Chips */
+.db-filter-chips {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.filter-chip {
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  font-size: var(--label-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.filter-chip:hover {
+  background: var(--surface-container-high);
+}
+
+.filter-chip.active {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+/* CSV Actions */
+.csv-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--breathing-room-sm);
+}
+
+.csv-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
+  font-size: var(--label-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.csv-btn:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.csv-btn.import {
+  background: var(--primary-fixed);
+  color: var(--primary);
+}
+
+.csv-btn.import:hover {
+  background: var(--primary-fixed-dim);
+}
+
+.import-status {
+  font-size: var(--label-sm);
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  animation: fadeIn var(--transition-base);
+}
+
+.import-status.success {
+  color: var(--success);
+  background: var(--success-container);
+}
+
+.import-status.error {
+  color: var(--error);
+  background: var(--error-container);
+}
+
 .db-stats {
   display: flex;
   gap: 24px;
