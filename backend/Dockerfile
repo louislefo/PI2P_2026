@@ -16,20 +16,20 @@ RUN apt-get update && \
 ENV CONFIG_PATH=config/settings.json
 ENV DB_PATH=data/pi2p.db
 
-# ──── ÉTAPE 1 : PyTorch CPU-ONLY ────
-# Sur le Pi il n'y a pas de GPU NVIDIA, donc on installe la version CPU
-# qui fait ~200 Mo au lieu de +1.5 Go (CUDA inutile)
-RUN pip install --no-cache-dir \
-    torch torchvision \
-    --index-url https://download.pytorch.org/whl/cpu
-
-# ──── ÉTAPE 2 : Dépendances Python ────
-# torch est déjà installé, pip skip la dépendance CUDA de ultralytics/easyocr
+# ──── INSTALLATION PYTHON EN UNE SEULE COUCHE (optimise l'espace disque) ────
+# 1. PyTorch CPU-only depuis le repo officiel CPU (pas de CUDA = ~200Mo au lieu de 1.5Go)
+# 2. requirements.txt (torch déjà satisfait, pip ne re-télécharge pas)
+# 3. lgpio pour GPIO natif du Pi
+# 4. Nettoyage : supprime opencv-python (non-headless dupliqué par ultralytics)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# ──── ÉTAPE 3 : Lib GPIO spécifique au Pi (Linux-only) ────
-RUN pip install --no-cache-dir lgpio || echo "lgpio non disponible, fallback mock GPIO"
+RUN pip install --no-cache-dir \
+        torch torchvision \
+        --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir lgpio 2>/dev/null || true && \
+    pip uninstall -y opencv-python 2>/dev/null || true && \
+    find /usr/local/lib/python3.11 -name '*.pyc' -delete && \
+    find /usr/local/lib/python3.11 -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 
 COPY . .
 
