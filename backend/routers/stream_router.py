@@ -22,13 +22,13 @@ def _run_secondary_cam():
     if is_windows:
         cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
     else:
-        print("🎥 [STREAM] Lancement capture USB (index 0)")
-        cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        print("🎥 [STREAM] Lancement capture USB secondaire via V4L2 natif (index 1)")
+        cap = cv2.VideoCapture(1, cv2.CAP_V4L2)
         
     if cap.isOpened():
-        print("✅ [STREAM] Caméra USB trouvée.")
+        print("✅ [STREAM] Caméra USB trouvée à l'index 1.")
     else:
-        print("⚠️ [STREAM] Caméra USB introuvable à l'index 0.")
+        print("⚠️ [STREAM] Caméra USB introuvable à l'index 1.")
         _secondary_running = False
         return
     

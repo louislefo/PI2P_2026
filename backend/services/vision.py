@@ -8,84 +8,7 @@ from core.config import load_config, get_authorized_plates
 import logging
 from datetime import datetime
 
-import socket
-import numpy as np
-import logging
-from datetime import datetime
 
-class RawTCPCamera:
-    """ Lecteur de flux JPEG brut sur socket TCP (0 délai de buffer) """
-    def __init__(self, ip, port):
-        self.ip = ip
-        self.port = port
-        self.sock = None
-        self.buffer = b''
-        self.latest_frame = None
-        self.running = True
-        self.thread = threading.Thread(target=self._capture_loop, daemon=True)
-        self.thread.start()
-        
-    def _connect(self):
-        try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.settimeout(3.0)
-            self.sock.connect((self.ip, self.port))
-            print(f"✅ [VISION] Connecté au flux brut CSI sur {self.ip}:{self.port}")
-        except Exception as e:
-            self.sock = None
-
-    def _capture_loop(self):
-        start_marker = b'\xff\xd8'
-        end_marker = b'\xff\xd9'
-        while self.running:
-            if not self.sock:
-                self._connect()
-                if not self.sock:
-                    time.sleep(1)
-                    continue
-                    
-            try:
-                chunk = self.sock.recv(16384)
-                if not chunk:
-                    self.sock.close()
-                    self.sock = None
-                    continue
-                self.buffer += chunk
-                
-                # On vide le buffer des vieilles frames et on garde QUE la dernière
-                while True:
-                    a = self.buffer.find(start_marker)
-                    b = self.buffer.find(end_marker)
-                    
-                    if a != -1 and b != -1 and b > a:
-                        jpg = self.buffer[a:b+2]
-                        self.buffer = self.buffer[b+2:]
-                        frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
-                        if frame is not None:
-                            self.latest_frame = frame
-                    else:
-                        # Nettoyage de sécurité si on reçoit n'importe quoi
-                        if len(self.buffer) > 1000000:
-                            self.buffer = self.buffer[-50000:]
-                        break
-            except Exception as e:
-                if self.sock:
-                    self.sock.close()
-                self.sock = None
-                time.sleep(1)
-
-    def read(self):
-        if self.latest_frame is not None:
-            return True, self.latest_frame.copy()
-        return False, None
-            
-    def set(self, prop, val):
-        pass # Ignoré
-        
-    def release(self):
-        self.running = False
-        if self.sock:
-            self.sock.close()
 
 # On coupe les logs inutiles d'easyocr
 logging.getLogger("easyocr").setLevel(logging.ERROR)
@@ -186,17 +109,8 @@ class VisionProcessor:
         if is_windows:
             cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         else:
-            print("🎥 [VISION] Connexion au flux Nappe CSI via TCP Socket Python")
-            # "host.docker.internal" trouve l'IP du Raspberry Pi (host) 
-            # par défaut sur Docker Linux, le gateway est souvent 172.17.0.1 si ça fail.
-            cap = RawTCPCamera("172.17.0.1", 5000)
-            
-            # Petit mode de secours si 172.17.0.1 ne marche pas (bridge standard de RPi)
-            cap.read()
-            if not cap.sock:
-                cap = RawTCPCamera("172.18.0.1", 5000)
-            if not cap.sock:
-                cap = RawTCPCamera("host.docker.internal", 5000)
+            print("🎥 [VISION] Connexion au flux Nappe CSI via V4L2 natif (index 0)")
+            cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
             
         # --- OPTIMISATION VIDEO ---
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
