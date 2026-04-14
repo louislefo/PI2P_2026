@@ -3,16 +3,19 @@ services:
     build: ./backend
     privileged: true
     devices:
-      - "/dev/video2:/dev/video98"  # Nappe -> /dev/video98
-      - "/dev/video0:/dev/video99"  # USB -> /dev/video99
-      - "/dev/media0:/dev/media98"
-      - "/dev/media5:/dev/media99"
+      - "/dev/video2:/dev/video0"
+      - "/dev/video0:/dev/video1"
+      - "/dev/media0:/dev/media0"
+      - "/dev/media1:/dev/media1"
+      - "/dev/media2:/dev/media2"
+      - "/dev/media5:/dev/media5"
     volumes:
       - ./config:/app/config
       - ./data:/app/data
     ports:
       - "8000:8000"
     environment:
+      - LIBCAMERA_LOG_LEVELS=*:3 # Optionnel : pour voir si libcamerify travaille
       - CONFIG_PATH=config/settings.json
       - DB_PATH=data/pi2p.db
     restart: always

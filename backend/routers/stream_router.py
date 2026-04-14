@@ -16,13 +16,19 @@ _secondary_running = False
 def _run_secondary_cam():
     """Thread dédié pour capturer la caméra secondaire (USB)."""
     global _secondary_frame, _secondary_running
-    cap = None
+    import platform
+    is_windows = platform.system() == "Windows"
     
-    cap = cv2.VideoCapture("/dev/video99", cv2.CAP_V4L2)
-    if cap.isOpened():
-        print("✅ [STREAM] Caméra secondaire USB trouvée sur /dev/video99.")
+    if is_windows:
+        cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
     else:
-        print("⚠️ [STREAM] Caméra secondaire USB introuvable sur /dev/video99.")
+        print("🎥 [STREAM] Lancement capture USB secondaire via libcamerify (index 1)")
+        cap = cv2.VideoCapture(1, cv2.CAP_V4L2)
+        
+    if cap.isOpened():
+        print("✅ [STREAM] Caméra secondaire trouvée.")
+    else:
+        print("⚠️ [STREAM] Caméra secondaire introuvable à l'index 1.")
         _secondary_running = False
         return
     
