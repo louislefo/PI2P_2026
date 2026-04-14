@@ -8,6 +8,65 @@ from core.config import load_config, get_authorized_plates
 import logging
 from datetime import datetime
 
+import socket
+import numpy as np
+import logging
+from datetime import datetime
+
+class RawTCPCamera:
+    """ Lecteur de flux JPEG brut sur socket TCP (spécial rpicam-vid) """
+    def __init__(self, ip, port):
+        self.ip = ip
+        self.port = port
+        self.sock = None
+        self.buffer = b''
+        
+    def _connect(self):
+        try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.settimeout(3.0)
+            self.sock.connect((self.ip, self.port))
+            print(f"✅ [VISION] Connecté au flux brut CSI sur {self.ip}:{self.port}")
+        except Exception as e:
+            self.sock = None
+
+    def read(self):
+        if not self.sock:
+            self._connect()
+            if not self.sock: return False, None
+            
+        try:
+            # Recherche des marqueurs JPEG
+            start_marker = b'\xff\xd8'
+            end_marker = b'\xff\xd9'
+            
+            while True:
+                chunk = self.sock.recv(8192)
+                if not chunk:
+                    self.sock = None
+                    return False, None
+                self.buffer += chunk
+                
+                a = self.buffer.find(start_marker)
+                b = self.buffer.find(end_marker)
+                
+                if a != -1 and b != -1 and b > a:
+                    jpg = self.buffer[a:b+2]
+                    self.buffer = self.buffer[b+2:]
+                    frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                    return True, frame
+        except Exception as e:
+            self.sock.close()
+            self.sock = None
+            return False, None
+            
+    def set(self, prop, val):
+        pass # Ignoré
+        
+    def release(self):
+        if self.sock:
+            self.sock.close()
+
 # On coupe les logs inutiles d'easyocr
 logging.getLogger("easyocr").setLevel(logging.ERROR)
 
@@ -107,8 +166,17 @@ class VisionProcessor:
         if is_windows:
             cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         else:
-            print("🎥 [VISION] Connexion au flux Nappe CSI via HTTP (VLC)")
-            cap = cv2.VideoCapture("http://host.docker.internal:5000/stream.mjpg")
+            print("🎥 [VISION] Connexion au flux Nappe CSI via TCP Socket Python")
+            # "host.docker.internal" trouve l'IP du Raspberry Pi (host) 
+            # par défaut sur Docker Linux, le gateway est souvent 172.17.0.1 si ça fail.
+            cap = RawTCPCamera("172.17.0.1", 5000)
+            
+            # Petit mode de secours si 172.17.0.1 ne marche pas (bridge standard de RPi)
+            cap.read()
+            if not cap.sock:
+                cap = RawTCPCamera("172.18.0.1", 5000)
+            if not cap.sock:
+                cap = RawTCPCamera("host.docker.internal", 5000)
             
         # --- OPTIMISATION VIDEO ---
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
