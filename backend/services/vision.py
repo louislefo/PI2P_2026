@@ -101,15 +101,15 @@ class VisionProcessor:
         return False
 
     def _run(self):
-        # Nappe CSI remappée sur l'index 0
-        source = self.config.get("camera_source", 0) 
-        cap = cv2.VideoCapture(source) # Retrait de cv2.CAP_V4L2 selon les conseils
+        # Nappe CSI est nativement sur l'index 2 de votre host
+        source = self.config.get("camera_source", 2) 
+        cap = cv2.VideoCapture(source)
         
         if cap.isOpened():
-            print("✅ [VISION] Caméra Nappe (index 0) OUVERTE.")
+            print(f"✅ [VISION] Caméra Nappe (index {source}) OUVERTE.")
         else:
-            print("⚠️ [VISION] Impossible d'ouvrir la caméra Nappe (index 0).")
-            cap = cv2.VideoCapture(0)
+            print(f"⚠️ [VISION] Impossible d'ouvrir la caméra Nappe (index {source}).")
+            cap = cv2.VideoCapture(2)
             
         # --- OPTIMISATION VIDEO ---
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
