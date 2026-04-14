@@ -2,17 +2,15 @@ FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
-# Dépendances système pour OpenCV headless + EasyOCR sur ARM64
+# 1. Dépendances système (ne change presque jamais)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        libgl1 \
-        libglib2.0-0 \
-        libsm6 \
-        libxrender1 \
-        libxext6 \
+    libgl1 libglib2.0-0 libsm6 libxrender1 libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# 2. INSTALLATION DE PYTORCH SEULE (La couche la plus lourde)
+# On le fait AVANT de copier le requirements.txt
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # ──── INSTALLATION OPTIMISÉE POUR PI (CPU-ONLY) ────
 # 1. PyTorch CPU-only (~200Mo au lieu de 1.5Go CUDA)
@@ -21,13 +19,16 @@ COPY requirements.txt .
 # 4. lgpio pour GPIO natif Pi (Linux-only, fallback si échec)
 # 5. Force-reinstall opencv-python-headless pour écraser toute version non-headless
 #    installée par ultralytics/easyocr (les deux partagent le même dossier cv2/)
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir opencv-python-headless && \
+# 3. Maintenant on copie le requirements.txt
+COPY requirements.txt .
+
+# 4. Installation des autres dépendances
+# Si tu modifies ton requirements.txt, Docker repartira d'ici, sans toucher à Torch
+RUN pip install --no-cache-dir opencv-python-headless && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir lgpio 2>/dev/null || true && \
     pip install --force-reinstall --no-cache-dir opencv-python-headless && \
-    find /usr/local/lib/python3.11 -name '*.pyc' -delete && \
-    find /usr/local/lib/python3.11 -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+    find /usr/local/lib/python3.11 -name '*.pyc' -delete
 
 COPY . .
 

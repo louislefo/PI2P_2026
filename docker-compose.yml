@@ -5,6 +5,8 @@ services:
     devices:
       - "/dev/video0:/dev/video0"
       - "/dev/video1:/dev/video1"
+      - "/dev/video2:/dev/video2"
+      - "/dev/video14:/dev/video14"  # Souvent utilisé par le codec BCM pour renvoyer la vidéo du Pi
       - "/dev/media4:/dev/media4"
       - "/dev/media5:/dev/media5"
     volumes:
