@@ -16,10 +16,15 @@ _secondary_running = False
 def _run_secondary_cam():
     """Thread dédié pour capturer la caméra secondaire (USB = /dev/video1 = index 1)."""
     global _secondary_frame, _secondary_running
-    cap = cv2.VideoCapture(1)
-    
-    if not cap.isOpened():
-        print("⚠️ [STREAM] Caméra secondaire (index 1) non disponible.")
+    cap = None
+    for index in [2, 1, 0, 14]:
+        cap = cv2.VideoCapture(index)
+        if cap.isOpened():
+            print(f"✅ [STREAM] Caméra secondaire trouvée sur l'index {index}.")
+            break
+            
+    if cap is None or not cap.isOpened():
+        print("⚠️ [STREAM] Caméra secondaire introuvable sur aucun index (2, 1, 0).")
         _secondary_running = False
         return
     
