@@ -101,12 +101,11 @@ class VisionProcessor:
         return False
 
     def _run(self):
-        # La Nappe CSI est remappée sur l'index 0 via Docker
-        source = self.config.get("camera_source", 0) 
-        cap = cv2.VideoCapture(source, cv2.CAP_V4L2)
+        # La Nappe CSI est remappée sur /dev/video98 via Docker
+        cap = cv2.VideoCapture("/dev/video98", cv2.CAP_V4L2)
         
         if not cap.isOpened():
-            print(f"⚠️ [VISION] Impossible d'ouvrir la caméra Nappe {source}.")
+            print(f"⚠️ [VISION] Impossible d'ouvrir la caméra Nappe (/dev/video98).")
             cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
             
         # --- OPTIMISATION VIDEO ---
