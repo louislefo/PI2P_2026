@@ -9,7 +9,7 @@ RUN apt-get update && \
     libcamera-v4l2 libcamera-tools \
     && rm -rf /var/lib/apt/lists/*
 
-RUN usermod -aG video,render root
+RUN groupadd -f render && usermod -aG video,render root
 
 # 2. INSTALLATION DE PYTORCH SEULE (La couche la plus lourde)
 # On le fait AVANT de copier le requirements.txt
