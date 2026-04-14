@@ -107,8 +107,8 @@ class VisionProcessor:
         if is_windows:
             cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         else:
-            print("🎥 [VISION] Lancement capture CSI via libcamerify (index 0)")
-            cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+            print("🎥 [VISION] Connexion au flux Nappe CSI via Serveur TCP Host")
+            cap = cv2.VideoCapture("tcp://host.docker.internal:5000/")
             
         # --- OPTIMISATION VIDEO ---
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
