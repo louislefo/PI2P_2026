@@ -2,9 +2,12 @@ services:
   api:
     build: ./backend
     privileged: true
-    devices: [] # Supprimé au profit du volume global
+    devices:
+      - "/dev/video2:/dev/video0"  # Nappe -> index 0 interne
+      - "/dev/video0:/dev/video1"  # USB -> index 1 interne
+      - "/dev/media0:/dev/media0"
+      - "/dev/media5:/dev/media5"
     volumes:
-      - /dev:/dev
       - ./config:/app/config
       - ./data:/app/data
     ports:

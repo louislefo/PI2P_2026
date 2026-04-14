@@ -18,8 +18,8 @@ def _run_secondary_cam():
     global _secondary_frame, _secondary_running
     cap = None
     
-    # L'USB WCAM100BK est physiquement sur /dev/video0
-    for index in [0, 1, 2, 14]:
+    # L'USB WCAM100BK est physiquement sur /dev/video0, remappée sur l'index 1 en interne
+    for index in [1]:
         cap = cv2.VideoCapture(index, cv2.CAP_V4L2)
         if cap.isOpened():
             print(f"✅ [STREAM] Caméra secondaire trouvée sur l'index {index}.")
