@@ -101,11 +101,13 @@ class VisionProcessor:
         return False
 
     def _run(self):
-        # La Nappe CSI est remappée sur /dev/video98 via Docker
-        cap = cv2.VideoCapture("/dev/video98", cv2.CAP_V4L2)
+        import platform
+        is_windows = platform.system() == "Windows"
         
-        if not cap.isOpened():
-            print(f"⚠️ [VISION] Impossible d'ouvrir la caméra Nappe (/dev/video98).")
+        if is_windows:
+            cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        else:
+            print("🎥 [VISION] Lancement capture CSI via libcamerify (index 0)")
             cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
             
         # --- OPTIMISATION VIDEO ---

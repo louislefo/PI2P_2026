@@ -6,7 +6,10 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 libsm6 libxrender1 libxext6 \
+    libcamera-v4l2-utils libcamera-apps-lite \
     && rm -rf /var/lib/apt/lists/*
+
+RUN usermod -aG video,render root
 
 # 2. INSTALLATION DE PYTORCH SEULE (La couche la plus lourde)
 # On le fait AVANT de copier le requirements.txt
@@ -43,4 +46,4 @@ ENV EASYOCR_MODULE_PATH=/app/data/models
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["libcamerify", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
