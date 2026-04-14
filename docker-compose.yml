@@ -3,10 +3,10 @@ services:
     build: ./backend
     privileged: true
     devices:
-      - "/dev/video2:/dev/video98"  # Nappe -> /dev/video98
-      - "/dev/video0:/dev/video99"  # USB -> /dev/video99
-      - "/dev/media0:/dev/media98"
-      - "/dev/media5:/dev/media99"
+      - "/dev/video2:/dev/video0"  # Nappe -> index 0 interne
+      - "/dev/video0:/dev/video1"  # USB -> index 1 interne
+      - "/dev/media0:/dev/media0"
+      - "/dev/media5:/dev/media5"
     volumes:
       - ./config:/app/config
       - ./data:/app/data
