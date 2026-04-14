@@ -101,12 +101,22 @@ class VisionProcessor:
         return False
 
     def _run(self):
-        source = self.config.get("camera_source", 0)
-        cap = cv2.VideoCapture(source)
+        # La Nappe CSI est physiquement sur /dev/video2 d'après v4l2-ctl
+        source = self.config.get("camera_source", 2) 
+        cap = cv2.VideoCapture(source, cv2.CAP_V4L2)
         
-        if not cap.isOpened() and source != 0:
-            cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            print(f"⚠️ [VISION] Impossible d'ouvrir la caméra {source}. Tentative de secours sur l'index 0.")
+            cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
             
+        # --- OPTIMISATION VIDEO ---
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        
+        last_yolo_time = 0
+        last_boxes = []
+
         while self.running:
             ret, frame = cap.read()
             if not ret:
@@ -115,55 +125,44 @@ class VisionProcessor:
             
             annotated_frame = frame.copy()
             if self.model:
-                # Déterminer les IDs à scanner (Voiture par défaut + les funs choisis)
-                selected_objects = self.config.get("detection_objects", ["car"])
-                target_ids = [self.coco_mapping.get(obj) for obj in selected_objects if obj in self.coco_mapping]
-                
-                # YOLO - ON RESTREINT LE CLASSIFICATEUR EXACTEMENT AUX ID DEMANDES
-                results = self.model(frame, classes=target_ids, verbose=False) 
-                annotated_frame = results[0].plot()
-                
-                # --- LANCEMENT OCR INTELLIGENT ---
                 current_time = time.time()
                 
-                # On limite l'OCR à 1 fois toutes les 2 secondes pour éviter le lag video
-                # Et on bypass si le portail est forcé.
-                cfg = load_config()
-                if self.reader and (current_time - self.last_ocr_time > 2.0) and cfg.get("gate_mode", "auto") == "auto":
-                    boxes = results[0].boxes
-                    for box in boxes:
-                        cls_id = int(box.cls[0])
-                        # L'OCR ne se lance QUE sur les véhicules porteurs de plaques probables
-                        if cls_id in [2, 3, 5, 7]: # 2=car, 3=motorcycle, 5=bus, 7=truck
-                            x1, y1, x2, y2 = map(int, box.xyxy[0])
-                            
-                            # On passe la voiture ENTIÈRE à l'OCR
-                            roi_y1 = y1
-                            car_roi = frame[y1:y2, x1:x2]
-                            
-                            if car_roi.shape[0] > 10 and car_roi.shape[1] > 10: 
-                                obj_name = "Voiture" if cls_id == 2 else "Moto/Camion"
-                                print(f"🚙 [INFO] {obj_name} détectée ! Tentative de lecture de plaque...")
+                # YOLO Throttle: Exécution 2 fois par sec max (0.5s)
+                if current_time - last_yolo_time > 0.5:
+                    # --- Filtrage Véhicules Uniquement ---
+                    target_ids = [2, 3, 5, 7] # 2=car, 3=motorcycle, 5=bus, 7=truck
+                    results = self.model(frame, classes=target_ids, verbose=False) 
+                    
+                    # On garde les boxes pour dessiner fluidement sur les frames sans YOLO intermédiaires
+                    last_boxes = results[0].boxes
+                    last_yolo_time = current_time
+                    
+                    # --- LANCEMENT OCR INTELLIGENT ---
+                    cfg = load_config()
+                    if self.reader and (current_time - self.last_ocr_time > 2.0) and cfg.get("gate_mode", "auto") == "auto":
+                        for box in last_boxes:
+                            cls_id = int(box.cls[0])
+                            if cls_id in [2, 3, 5, 7]:
+                                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                                car_roi = frame[y1:y2, x1:x2]
                                 
-                                import os
-                                os.makedirs("data/debug_ocr", exist_ok=True)
-                                
-                                # AMÉLIORATION OCR : Traitement d'image pour aider EasyOCR
-                                # 1. Passage en niveaux de gris
-                                gray = cv2.cvtColor(car_roi, cv2.COLOR_BGR2GRAY)
-                                
-                                # 2. Agrandissement de l'image (X2) pour mieux voir les pixels
-                                enlarged = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-                                
-                                # 3. Filtre de contraste (Optionnel, on essaye d'abord juste le zoom+gris)
-                                cv2.imwrite(f"data/debug_ocr/roi_{int(current_time)}.jpg", enlarged)
-                                
-                                # OCR DANS UN THREAD (Pour ne jamais bloquer la vidéo)
-                                # On passe le car_roi couleur pour le sauvegarder plus tard dans l'historique
-                                self.last_ocr_time = current_time
-                                threading.Thread(target=self._run_ocr_thread, args=(enlarged, car_roi.copy(), current_time), daemon=True).start()
-                                break
-                    self.last_ocr_time = max(self.last_ocr_time, current_time)
+                                if car_roi.shape[0] > 10 and car_roi.shape[1] > 10: 
+                                    obj_name = "Voiture" if cls_id == 2 else "Moto/Camion"
+                                    print(f"🚙 [INFO] {obj_name} détectée ! Tentative de lecture de plaque...")
+                                    import os
+                                    os.makedirs("data/debug_ocr", exist_ok=True)
+                                    gray = cv2.cvtColor(car_roi, cv2.COLOR_BGR2GRAY)
+                                    enlarged = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+                                    cv2.imwrite(f"data/debug_ocr/roi_{int(current_time)}.jpg", enlarged)
+                                    self.last_ocr_time = current_time
+                                    threading.Thread(target=self._run_ocr_thread, args=(enlarged, car_roi.copy(), current_time), daemon=True).start()
+                                    break
+                        self.last_ocr_time = max(self.last_ocr_time, current_time)
+
+                # Dessiner les dernières box connues pour un rendu vidéo fluide
+                for box in last_boxes:
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
             ret, buffer = cv2.imencode('.jpg', annotated_frame)
             if ret:

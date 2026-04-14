@@ -2,14 +2,9 @@ services:
   api:
     build: ./backend
     privileged: true
-    devices:
-      - "/dev/video0:/dev/video0"
-      - "/dev/video1:/dev/video1"
-      - "/dev/video2:/dev/video2"
-      - "/dev/video14:/dev/video14"  # Souvent utilisé par le codec BCM pour renvoyer la vidéo du Pi
-      - "/dev/media4:/dev/media4"
-      - "/dev/media5:/dev/media5"
+    devices: [] # Supprimé au profit du volume global
     volumes:
+      - /dev:/dev
       - ./config:/app/config
       - ./data:/app/data
     ports:
