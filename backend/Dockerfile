@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 libsm6 libxrender1 libxext6 \
-    libcamera-v4l2-utils libcamera-apps-lite \
+    libcamera-v4l2 libcamera-tools \
     && rm -rf /var/lib/apt/lists/*
 
 RUN usermod -aG video,render root
