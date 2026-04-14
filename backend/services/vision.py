@@ -109,8 +109,8 @@ class VisionProcessor:
         if is_windows:
             cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         else:
-            print("🎥 [VISION] Connexion au flux Nappe CSI via V4L2 natif (index 0)")
-            cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+            print("🎥 [VISION] Connexion au flux Nappe CSI via Webcam Virtuelle (index 10)")
+            cap = cv2.VideoCapture(10, cv2.CAP_V4L2)
             
         # --- OPTIMISATION VIDEO ---
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)

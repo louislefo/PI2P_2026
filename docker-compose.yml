@@ -3,8 +3,8 @@ services:
     build: ./backend
     privileged: true
     devices:
-      - "/dev/video0:/dev/video0" # Camera 1 (CSI via bcm2835-v4l2)
-      - "/dev/video1:/dev/video1" # Camera 2 (Webcam USB)
+      - "/dev/video0:/dev/video0" # Camera USB native
+      - "/dev/video10:/dev/video10" # Camera Virtuelle CSI créée par v4l2loopback
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
