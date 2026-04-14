@@ -14,21 +14,29 @@ _secondary_thread = None
 _secondary_running = False
 
 def _run_secondary_cam():
-    """Thread dédié pour capturer la caméra secondaire (USB = /dev/video1 = index 1)."""
+    """Thread dédié pour capturer la caméra secondaire (USB)."""
     global _secondary_frame, _secondary_running
     cap = None
-    for index in [2, 1, 0, 14]:
-        cap = cv2.VideoCapture(index)
+    
+    # L'USB WCAM100BK est physiquement sur /dev/video0
+    for index in [0, 1, 2, 14]:
+        cap = cv2.VideoCapture(index, cv2.CAP_V4L2)
         if cap.isOpened():
             print(f"✅ [STREAM] Caméra secondaire trouvée sur l'index {index}.")
             break
             
     if cap is None or not cap.isOpened():
-        print("⚠️ [STREAM] Caméra secondaire introuvable sur aucun index (2, 1, 0).")
+        print("⚠️ [STREAM] Caméra secondaire introuvable sur aucun index (0, 1, 2, 14).")
         _secondary_running = False
         return
     
-    print("✅ [STREAM] Caméra secondaire (index 1) ouverte.")
+    # --- OPTIMISATION: Limiter résolution, buffer et forcer YUYV ---
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+    print("✅ [STREAM] Caméra secondaire prête.")
     while _secondary_running:
         ret, frame = cap.read()
         if not ret:
