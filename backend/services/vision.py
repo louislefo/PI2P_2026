@@ -107,8 +107,8 @@ class VisionProcessor:
         if is_windows:
             cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         else:
-            print("🎥 [VISION] Connexion au flux Nappe CSI via Serveur TCP Host")
-            cap = cv2.VideoCapture("tcp://host.docker.internal:5000/")
+            print("🎥 [VISION] Connexion au flux Nappe CSI via HTTP (VLC)")
+            cap = cv2.VideoCapture("http://host.docker.internal:5000/stream.mjpg")
             
         # --- OPTIMISATION VIDEO ---
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)

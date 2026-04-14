@@ -21,3 +21,4 @@ voir les logs :
 docker logs pi2p_2026-api-1
 docker logs -f pi2p_2026-api-1
 
+rpicam-vid -t 0 --inline --codec mjpeg --width 640 --height 480 --framerate 30 -o tcp://0.0.0.0:5000 --listen &
