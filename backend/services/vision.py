@@ -101,14 +101,12 @@ class VisionProcessor:
         return False
 
     def _run(self):
-        # Pour la Nappe (IA) - Ciblée par libcamerify sur l'index 0
-        cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        # La Nappe CSI est remappée sur /dev/video98 via Docker
+        cap = cv2.VideoCapture("/dev/video98", cv2.CAP_V4L2)
         
-        if cap.isOpened():
-            print("✅ [VISION] Caméra Nappe (index 0) OUVERTE via libcamerify.")
-        else:
-            print("⚠️ [VISION] Impossible d'ouvrir la caméra Nappe (index 0).")
-            cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            print(f"⚠️ [VISION] Impossible d'ouvrir la caméra Nappe (/dev/video98).")
+            cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
             
         # --- OPTIMISATION VIDEO ---
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
@@ -118,21 +116,11 @@ class VisionProcessor:
         last_yolo_time = 0
         last_boxes = []
 
-        # Pour ne pas spammer les logs si cap.read() échoue en boucle
-        fail_count = 0 
-
         while self.running:
             ret, frame = cap.read()
             if not ret:
-                fail_count += 1
-                if fail_count % 30 == 1: # Log toutes les ~30 erreurs
-                    print(f"⚠️ [VISION] La caméra est ouverte, mais ne renvoie AUCUNE image (Erreur de décodage RAW ?). L'avez-vous passée en Legacy ?")
                 time.sleep(0.1)
                 continue
-            
-            if fail_count > 0:
-                print("✅ [VISION] Image reçue avec succès de la caméra Nappe !")
-                fail_count = 0
             
             annotated_frame = frame.copy()
             if self.model:

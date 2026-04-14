@@ -18,12 +18,11 @@ def _run_secondary_cam():
     global _secondary_frame, _secondary_running
     cap = None
     
-    # L'USB reléguée sur l'index 1 par libcamerify
-    cap = cv2.VideoCapture(1, cv2.CAP_V4L2)
+    cap = cv2.VideoCapture("/dev/video99", cv2.CAP_V4L2)
     if cap.isOpened():
-        print("✅ [STREAM] Caméra secondaire USB trouvée sur l'index 1.")
+        print("✅ [STREAM] Caméra secondaire USB trouvée sur /dev/video99.")
     else:
-        print("⚠️ [STREAM] Caméra secondaire USB introuvable sur l'index 1.")
+        print("⚠️ [STREAM] Caméra secondaire USB introuvable sur /dev/video99.")
         _secondary_running = False
         return
     
