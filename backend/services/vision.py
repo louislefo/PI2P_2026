@@ -14,12 +14,16 @@ import logging
 from datetime import datetime
 
 class RawTCPCamera:
-    """ Lecteur de flux JPEG brut sur socket TCP (spécial rpicam-vid) """
+    """ Lecteur de flux JPEG brut sur socket TCP (0 délai de buffer) """
     def __init__(self, ip, port):
         self.ip = ip
         self.port = port
         self.sock = None
         self.buffer = b''
+        self.latest_frame = None
+        self.running = True
+        self.thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self.thread.start()
         
     def _connect(self):
         try:
@@ -30,40 +34,56 @@ class RawTCPCamera:
         except Exception as e:
             self.sock = None
 
-    def read(self):
-        if not self.sock:
-            self._connect()
-            if not self.sock: return False, None
-            
-        try:
-            # Recherche des marqueurs JPEG
-            start_marker = b'\xff\xd8'
-            end_marker = b'\xff\xd9'
-            
-            while True:
-                chunk = self.sock.recv(8192)
+    def _capture_loop(self):
+        start_marker = b'\xff\xd8'
+        end_marker = b'\xff\xd9'
+        while self.running:
+            if not self.sock:
+                self._connect()
+                if not self.sock:
+                    time.sleep(1)
+                    continue
+                    
+            try:
+                chunk = self.sock.recv(16384)
                 if not chunk:
+                    self.sock.close()
                     self.sock = None
-                    return False, None
+                    continue
                 self.buffer += chunk
                 
-                a = self.buffer.find(start_marker)
-                b = self.buffer.find(end_marker)
-                
-                if a != -1 and b != -1 and b > a:
-                    jpg = self.buffer[a:b+2]
-                    self.buffer = self.buffer[b+2:]
-                    frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
-                    return True, frame
-        except Exception as e:
-            self.sock.close()
-            self.sock = None
-            return False, None
+                # On vide le buffer des vieilles frames et on garde QUE la dernière
+                while True:
+                    a = self.buffer.find(start_marker)
+                    b = self.buffer.find(end_marker)
+                    
+                    if a != -1 and b != -1 and b > a:
+                        jpg = self.buffer[a:b+2]
+                        self.buffer = self.buffer[b+2:]
+                        frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                        if frame is not None:
+                            self.latest_frame = frame
+                    else:
+                        # Nettoyage de sécurité si on reçoit n'importe quoi
+                        if len(self.buffer) > 1000000:
+                            self.buffer = self.buffer[-50000:]
+                        break
+            except Exception as e:
+                if self.sock:
+                    self.sock.close()
+                self.sock = None
+                time.sleep(1)
+
+    def read(self):
+        if self.latest_frame is not None:
+            return True, self.latest_frame.copy()
+        return False, None
             
     def set(self, prop, val):
         pass # Ignoré
         
     def release(self):
+        self.running = False
         if self.sock:
             self.sock.close()
 
