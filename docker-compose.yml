@@ -28,7 +28,7 @@ services:
     environment:
       - CONFIG_PATH=config/settings.json
       - DB_PATH=data/pi2p.db
-      - CSI_STREAM_URL=http://camera-bridge:8081/stream   # URL du pont CSI
+      - CSI_BRIDGE_URL=http://camera-bridge:8081   # URL de base du bridge CSI
     depends_on:
       - camera-bridge
     restart: always

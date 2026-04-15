@@ -106,57 +106,89 @@ class VisionProcessor:
         import platform
         import os
         is_windows = platform.system() == "Windows"
-        
+
+        # ── Abstraction d'acquisition de frame ──────────────────────────────────
+        # Windows : VideoCapture classique
+        # Linux   : mode PULL via GET /latest.jpg → zéro buffer, zéro délai
+        cap = None
+        get_frame = None
+        cleanup = lambda: None
+
         if is_windows:
             print("🎥 [VISION] Windows détecté — Caméra locale index 0")
             cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+            def get_frame():
+                ret, frame = cap.read()
+                return frame if ret else None
+
+            cleanup = cap.release
+            frame_interval = 1 / 30
+
         else:
-            # Lecture du flux MJPEG servi par le conteneur camera-bridge
-            csi_url = os.environ.get("CSI_STREAM_URL", "http://camera-bridge:8081/stream")
-            print(f"🎥 [VISION] Connexion au flux CSI via bridge : {csi_url}")
-            
-            # Retry tant que le bridge n'est pas prêt
-            cap = None
-            for attempt in range(10):
-                cap = cv2.VideoCapture(csi_url)
-                if cap.isOpened():
-                    print("✅ [VISION] Flux CSI connecté.")
-                    break
-                print(f"⏳ [VISION] Bridge pas encore prêt (tentative {attempt+1}/10), attente 3s...")
-                cap.release()
+            import requests
+            import numpy as np
+
+            # URL du dernier JPEG (pull, pas stream continu)
+            csi_base = os.environ.get("CSI_BRIDGE_URL", "http://camera-bridge:8081")
+            latest_url = csi_base.rstrip("/") + "/latest.jpg"
+            health_url = csi_base.rstrip("/") + "/health"
+
+            print(f"🎥 [VISION] Mode pull JPEG CSI : {latest_url}")
+
+            # Attendre que le bridge soit opérationnel
+            for attempt in range(20):
+                try:
+                    r = requests.get(health_url, timeout=3)
+                    if r.status_code == 200 and b"OK" in r.content:
+                        print("✅ [VISION] Bridge CSI prêt.")
+                        break
+                except Exception:
+                    pass
+                print(f"⏳ [VISION] Bridge pas encore prêt (tentative {attempt+1}/20), attente 3s...")
                 time.sleep(3)
-            
-            if cap is None or not cap.isOpened():
-                print("❌ [VISION] Impossible de se connecter au flux CSI après 10 tentatives.")
-                self.running = False
-                return
-        
+
+            def get_frame():
+                """Récupère TOUJOURS le dernier frame disponible — aucun buffer."""
+                try:
+                    r = requests.get(latest_url, timeout=2.0)
+                    if r.status_code == 200 and r.content:
+                        arr = np.frombuffer(r.content, dtype=np.uint8)
+                        return cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                except Exception:
+                    pass
+                return None
+
+            # Sur Pi : YOLO (~300-500ms) est le goulot naturel → pas besoin de sleep
+            frame_interval = 0
+
+        # ── Boucle principale ───────────────────────────────────────────────────
         last_yolo_time = 0
         last_boxes = []
 
         while self.running:
-            ret, frame = cap.read()
-            if not ret:
+            frame = get_frame()
+            if frame is None:
                 time.sleep(0.1)
                 continue
-            
+
             annotated_frame = frame.copy()
             if self.model:
                 current_time = time.time()
-                
+
                 # YOLO Throttle: Exécution 2 fois par sec max (0.5s)
                 if current_time - last_yolo_time > 0.5:
                     # --- Filtrage Véhicules Uniquement ---
-                    target_ids = [2, 3, 5, 7] # 2=car, 3=motorcycle, 5=bus, 7=truck
-                    results = self.model(frame, classes=target_ids, verbose=False) 
-                    
+                    target_ids = [2, 3, 5, 7]  # 2=car, 3=motorcycle, 5=bus, 7=truck
+                    results = self.model(frame, classes=target_ids, verbose=False)
+
                     # On garde les boxes pour dessiner fluidement sur les frames sans YOLO intermédiaires
                     last_boxes = results[0].boxes
                     last_yolo_time = current_time
-                    
+
                     # --- LANCEMENT OCR INTELLIGENT ---
                     cfg = load_config()
                     if self.reader and (current_time - self.last_ocr_time > 2.0) and cfg.get("gate_mode", "auto") == "auto":
@@ -165,8 +197,8 @@ class VisionProcessor:
                             if cls_id in [2, 3, 5, 7]:
                                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                                 car_roi = frame[y1:y2, x1:x2]
-                                
-                                if car_roi.shape[0] > 10 and car_roi.shape[1] > 10: 
+
+                                if car_roi.shape[0] > 10 and car_roi.shape[1] > 10:
                                     obj_name = "Voiture" if cls_id == 2 else "Moto/Camion"
                                     print(f"🚙 [INFO] {obj_name} détectée ! Tentative de lecture de plaque...")
                                     import os
@@ -188,11 +220,11 @@ class VisionProcessor:
             if ret:
                 with self.lock:
                     self.latest_frame = buffer.tobytes()
-            
-            time.sleep(1/30) # Vitesse 30 FPS pour un stream plus fluide
-            
-        if cap:
-            cap.release()
+
+            if frame_interval > 0:
+                time.sleep(frame_interval)
+
+        cleanup()
             
     def _run_ocr_thread(self, enlarged_img, color_roi, current_time):
         import difflib

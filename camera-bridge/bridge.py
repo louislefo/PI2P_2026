@@ -89,6 +89,8 @@ class StreamHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/stream":
             self._serve_stream()
+        elif self.path == "/latest.jpg":
+            self._serve_latest()
         elif self.path == "/health":
             self._serve_health()
         else:
@@ -122,6 +124,21 @@ class StreamHandler(BaseHTTPRequestHandler):
             print(f"📴 [BRIDGE] Client déconnecté : {self.client_address}", flush=True)
         except Exception as e:
             print(f"⚠️ [BRIDGE] Erreur stream: {e}", flush=True)
+
+    def _serve_latest(self):
+        """Retourne le dernier JPEG capturé — mode pull, zéro buffer."""
+        with frame_lock:
+            frame = latest_frame
+        if frame is None:
+            self.send_response(503)  # Pas encore de frame dispo
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Content-Length", str(len(frame)))
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.end_headers()
+        self.wfile.write(frame)
 
     def _serve_health(self):
         self.send_response(200)
