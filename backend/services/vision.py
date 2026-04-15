@@ -104,18 +104,35 @@ class VisionProcessor:
 
     def _run(self):
         import platform
+        import os
         is_windows = platform.system() == "Windows"
         
         if is_windows:
+            print("🎥 [VISION] Windows détecté — Caméra locale index 0")
             cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         else:
-            print("🎥 [VISION] Connexion au flux Nappe CSI via Webcam Virtuelle (index 10)")
-            cap = cv2.VideoCapture(10, cv2.CAP_V4L2)
+            # Lecture du flux MJPEG servi par le conteneur camera-bridge
+            csi_url = os.environ.get("CSI_STREAM_URL", "http://camera-bridge:8081/stream")
+            print(f"🎥 [VISION] Connexion au flux CSI via bridge : {csi_url}")
             
-        # --- OPTIMISATION VIDEO ---
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            # Retry tant que le bridge n'est pas prêt
+            cap = None
+            for attempt in range(10):
+                cap = cv2.VideoCapture(csi_url)
+                if cap.isOpened():
+                    print("✅ [VISION] Flux CSI connecté.")
+                    break
+                print(f"⏳ [VISION] Bridge pas encore prêt (tentative {attempt+1}/10), attente 3s...")
+                cap.release()
+                time.sleep(3)
+            
+            if cap is None or not cap.isOpened():
+                print("❌ [VISION] Impossible de se connecter au flux CSI après 10 tentatives.")
+                self.running = False
+                return
         
         last_yolo_time = 0
         last_boxes = []
