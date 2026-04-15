@@ -17,7 +17,8 @@ services:
     build: ./backend
     privileged: true
     devices:
-      - "/dev/video1:/dev/video1"   # Caméra USB WCAM100BK (vue d'ensemble)
+      - "/dev/video0:/dev/video0"   # Caméra USB WCAM100BK — stream principal
+      - "/dev/video1:/dev/video1"   # Caméra USB WCAM100BK — metadata
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
