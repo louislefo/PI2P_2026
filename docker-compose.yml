@@ -26,3 +26,10 @@ services:
     ports:
       - "8082:8082"
     restart: always
+
+  # ─── Dashboard React ────────────────────────────────────────────────
+  dashboard:
+    build: ./frontend
+    ports:
+      - "80:80"
+    restart: always

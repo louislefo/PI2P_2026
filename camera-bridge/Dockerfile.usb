@@ -1,8 +1,8 @@
 FROM python:3.11-slim
 
-# Dépendances pour OpenCV headless et V4L2
+# Dépendances (libgl1 remplace l'ancienne libgl1-mesa-glx)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 

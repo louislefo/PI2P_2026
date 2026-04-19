@@ -15,7 +15,8 @@ function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [isOnline, setIsOnline] = useState(false);
 
-  const API_BASE = `http://${window.location.hostname}:8000`;
+
+  const API_BASE = `http://192.168.137.1:8000`; // `http://${window.location.hostname}:8000`;
 
   // Fetch initial data
   useEffect(() => {
@@ -29,7 +30,7 @@ function App() {
     let reconnectTimer;
 
     const connect = () => {
-      ws = new WebSocket(`ws://${window.location.hostname}:8000/ws`);
+      ws = new WebSocket(`ws://192.168.137.1:8000/ws`);
 
       ws.onopen = () => {
         setIsOnline(true);
