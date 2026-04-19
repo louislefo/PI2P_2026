@@ -14,43 +14,24 @@ _secondary_thread = None
 _secondary_running = False
 
 def _run_secondary_cam():
-    """Thread dédié pour capturer la caméra secondaire (USB)."""
+    """Thread dédié pour capturer la caméra secondaire depuis le réseau (Pi)."""
     global _secondary_frame, _secondary_running
-    import platform
-    is_windows = platform.system() == "Windows"
-    
-    if is_windows:
-        cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
-    else:
-        print("🎥 [STREAM] Lancement capture USB native (/dev/video0)")
-        cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-        
-    if cap.isOpened():
-        print("✅ [STREAM] Caméra USB trouvée à /dev/video0.")
-    else:
-        print("⚠️ [STREAM] Caméra USB introuvable à /dev/video0.")
-        _secondary_running = False
-        return
-    
-    # --- OPTIMISATION: Limiter résolution, buffer et forcer YUYV ---
-    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    import requests
 
-    print("✅ [STREAM] Caméra secondaire prête.")
-    while _secondary_running:
-        ret, frame = cap.read()
-        if not ret:
-            time.sleep(0.1)
-            continue
-        ret, buffer = cv2.imencode('.jpg', frame)
-        if ret:
-            with _secondary_cam_lock:
-                _secondary_frame = buffer.tobytes()
-        time.sleep(1/15)  # 15 FPS pour la caméra secondaire (moins gourmand)
+    usb_url = "http://192.168.137.94:8082/latest.jpg"
+    print(f"🎥 [STREAM] Lancement lecture réseau Caméra USB ({usb_url})")
     
-    cap.release()
+    while _secondary_running:
+        try:
+            r = requests.get(usb_url, timeout=1.5)
+            if r.status_code == 200 and r.content:
+                # Transmet directement le Buffer Jpeg encodé depuis le serveur !
+                with _secondary_cam_lock:
+                    _secondary_frame = r.content
+        except requests.exceptions.RequestException:
+            pass
+        
+        time.sleep(1/15.0)  # On limite à 15 FPS pour ne pas étouffer le Pi
 
 def _ensure_secondary_started():
     """Démarre le thread de la caméra secondaire si pas déjà actif."""

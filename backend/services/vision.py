@@ -103,67 +103,45 @@ class VisionProcessor:
         return False
 
     def _run(self):
-        import platform
-        import os
-        is_windows = platform.system() == "Windows"
-
         # ── Abstraction d'acquisition de frame ──────────────────────────────────
-        # Windows : VideoCapture classique
-        # Linux   : mode PULL via GET /latest.jpg → zéro buffer, zéro délai
+        # Mode RÉSEAU PULL HTTP (depuis le Pi)
+        import requests
+        import numpy as np
+
+        # URL du dernier JPEG (bridge CSI sur le Pi)
+        csi_base = os.environ.get("CSI_BRIDGE_URL", "http://192.168.137.94:8081")
+        latest_url = csi_base.rstrip("/") + "/latest.jpg"
+        health_url = csi_base.rstrip("/") + "/health"
+        
         cap = None
-        get_frame = None
         cleanup = lambda: None
 
-        if is_windows:
-            print("🎥 [VISION] Windows détecté — Caméra locale index 0")
-            cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        print(f"🎥 [VISION] Mode réseau PULL HTTP CSI : {latest_url}")
 
-            def get_frame():
-                ret, frame = cap.read()
-                return frame if ret else None
+        for attempt in range(15):
+            try:
+                r = requests.get(health_url, timeout=2)
+                if r.status_code == 200 and b"OK" in r.content:
+                    print("✅ [VISION] Bridge CSI Pi prêt.")
+                    break
+            except Exception:
+                pass
+            print(f"⏳ [VISION] En attente du Pi (CSI) (tentative {attempt+1}/15)...")
+            time.sleep(2)
 
-            cleanup = cap.release
-            frame_interval = 1 / 30
+        def get_frame():
+            """Récupère le dernier frame disponible sur le Pi (pas de buffer)."""
+            try:
+                r = requests.get(latest_url, timeout=1.5)
+                if r.status_code == 200 and r.content:
+                    arr = np.frombuffer(r.content, dtype=np.uint8)
+                    return cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            except Exception:
+                pass
+            return None
 
-        else:
-            import requests
-            import numpy as np
-
-            # URL du dernier JPEG (pull, pas stream continu)
-            csi_base = os.environ.get("CSI_BRIDGE_URL", "http://camera-bridge:8081")
-            latest_url = csi_base.rstrip("/") + "/latest.jpg"
-            health_url = csi_base.rstrip("/") + "/health"
-
-            print(f"🎥 [VISION] Mode pull JPEG CSI : {latest_url}")
-
-            # Attendre que le bridge soit opérationnel
-            for attempt in range(20):
-                try:
-                    r = requests.get(health_url, timeout=3)
-                    if r.status_code == 200 and b"OK" in r.content:
-                        print("✅ [VISION] Bridge CSI prêt.")
-                        break
-                except Exception:
-                    pass
-                print(f"⏳ [VISION] Bridge pas encore prêt (tentative {attempt+1}/20), attente 3s...")
-                time.sleep(3)
-
-            def get_frame():
-                """Récupère TOUJOURS le dernier frame disponible — aucun buffer."""
-                try:
-                    r = requests.get(latest_url, timeout=2.0)
-                    if r.status_code == 200 and r.content:
-                        arr = np.frombuffer(r.content, dtype=np.uint8)
-                        return cv2.imdecode(arr, cv2.IMREAD_COLOR)
-                except Exception:
-                    pass
-                return None
-
-            # Sur Pi : YOLO (~300-500ms) est le goulot naturel → pas besoin de sleep
-            frame_interval = 0
+        # PC/Windows : on limite à 30fps environ la récupération pour ne pas spammer le Pi
+        frame_interval = 1 / 30.0
 
         # ── Boucle principale ───────────────────────────────────────────────────
         last_yolo_time = 0
