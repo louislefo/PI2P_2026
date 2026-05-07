@@ -7,3 +7,8 @@ led rouge : Gpio 22 / 15
 servomoteur  : Gpio 12 / pwm 0 / 32
 
 bouton : Gpio 26 / 37
+
+
+# a ajouter :
+cateur ultra son hc-sr04
+clavier numerique
