@@ -1,10 +1,11 @@
 import React from 'react';
-import { LayoutDashboard, Database, ScrollText, Settings, PanelLeftOpen, PanelLeftClose, AlertTriangle, Shield } from 'lucide-react';
+import { LayoutDashboard, Database, ScrollText, Settings, PanelLeftOpen, PanelLeftClose, AlertTriangle, Shield, Wrench } from 'lucide-react';
 
 const navItems = [
   { id: 'dashboard', label: 'Tableau de Bord', icon: LayoutDashboard },
   { id: 'database', label: 'Base de Données', icon: Database },
   { id: 'logs', label: "Journal d'Activité", icon: ScrollText },
+  { id: 'test', label: 'Test Hardware', icon: Wrench },
 ];
 
 export default function Sidebar({ currentView, setCurrentView, collapsed, setCollapsed }) {

@@ -27,6 +27,24 @@ services:
       - "8082:8082"
     restart: always
 
+  # ─── Hardware Bridge (LEDs + Servo + Audio) ────────────────────────
+  # Contrôle GPIO via API REST sur http://192.168.137.94:8083
+  hardware-bridge:
+    build:
+      context: ./hardware-bridge
+      dockerfile: Dockerfile
+    privileged: true                  # Requis pour GPIO + /dev/snd
+    devices:
+      - "/dev/snd:/dev/snd"           # Sortie audio jack 3.5mm
+    environment:
+      - PIN_LED_GREEN=27              # Board pin 13
+      - PIN_LED_ORANGE=17             # Board pin 11
+      - PIN_LED_RED=22                # Board pin 15
+      - PIN_SERVO=12                  # Board pin 32 / PWM0
+    ports:
+      - "8083:8083"
+    restart: always
+
   # ─── Dashboard React ────────────────────────────────────────────────
   dashboard:
     build: ./frontend
