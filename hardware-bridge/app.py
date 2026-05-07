@@ -196,12 +196,18 @@ def _angle_to_servo_value(angle: int) -> float:
     """
     Convertit angle (0-180°) en valeur gpiozero (-1.0 à +1.0).
 
-    Convention physique :
-      angle   0  → value = -1.0 → impulsion min 0.5ms → position 0°  (FERMÉ)
-      angle  90  → value =  0.0 → impulsion ctr 1.5ms → position 90° (OUVERT)
-      angle 180  → value = +1.0 → impulsion max 2.5ms → position 180°
+    Comportement PHYSIQUE observé sur ce montage :
+      value =  0.0 → impulsion 1.5ms → bras BAS   = FERMÉ
+      value = -1.0 → impulsion 0.5ms → bras HAUT  = OUVERT
+      value = +1.0 → impulsion 2.5ms → bras bas++ (dépasse le fermé)
+
+    Donc :
+      angle=  0 → value =  0.0 → FERMÉ  (bras bas)
+      angle= 90 → value = -1.0 → OUVERT (bras levé)
+      angle=180 → value = -1.0 → (clamped, même que 90° = ouvert max)
     """
-    return (angle / 90.0) - 1.0
+    raw = -(angle / 90.0)
+    return max(-1.0, min(1.0, raw))
 
 def _move_servo(angle: int):
     global _servo_angle
