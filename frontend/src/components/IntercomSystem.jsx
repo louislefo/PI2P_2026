@@ -1,154 +1,148 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Phone, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff, Volume2, Camera } from 'lucide-react';
 
-const HW_WS_BASE = 'ws://192.168.137.94:8083';
+const HW_WS_BASE  = 'ws://192.168.137.94:8083';
+const CAM_USB_URL = 'http://192.168.137.94:8082/stream';
 
-/**
- * Système d'interphone complet :
- * - Écoute le WebSocket /ws/call pour les événements d'appel
- * - Affiche une modal quand le bouton Pi est pressé
- * - Au décroché : capture le micro PC et stream l'audio via /ws/audio vers le jack Pi
- */
+// ── Génère une sonnerie "téléphone classique" via Web Audio ─────────────────
+// Double-ring : 0.4s bip / 0.2s silence / 0.4s bip / 2s silence (en boucle)
+function createRingtone() {
+  let stopped = false;
+  let timeoutId = null;
+
+  const playRing = () => {
+    if (stopped) return;
+    try {
+      const ctx = new AudioContext();
+      // Sonnerie classique : deux fréquences mélangées (440 Hz + 480 Hz)
+      const playBip = (startTime, duration) => {
+        [440, 480].forEach(freq => {
+          const osc  = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+
+          // Enveloppe : montée rapide → plateau → descente
+          gain.gain.setValueAtTime(0, startTime);
+          gain.gain.linearRampToValueAtTime(0.18, startTime + 0.02);
+          gain.gain.setValueAtTime(0.18, startTime + duration - 0.04);
+          gain.gain.linearRampToValueAtTime(0, startTime + duration);
+
+          osc.start(startTime);
+          osc.stop(startTime + duration);
+        });
+      };
+
+      const now = ctx.currentTime;
+      playBip(now,        0.4);   // 1er bip
+      playBip(now + 0.6,  0.4);   // 2e bip
+
+      // Fermer le contexte après la séquence + programmer le prochain cycle
+      timeoutId = setTimeout(() => {
+        ctx.close();
+        if (!stopped) timeoutId = setTimeout(playRing, 2200); // pause entre cycles
+      }, 1200);
+    } catch (_) {}
+  };
+
+  playRing();
+
+  return () => {               // stop()
+    stopped = true;
+    clearTimeout(timeoutId);
+  };
+}
+
 export default function IntercomSystem() {
-  const [callState, setCallState] = useState('idle'); // idle | ringing | active
-  const [isMuted, setIsMuted] = useState(false);
+  const [callState, setCallState]   = useState('idle'); // idle | ringing | active
+  const [isMuted, setIsMuted]       = useState(false);
   const [callDuration, setCallDuration] = useState(0);
+  const [micError, setMicError]     = useState(null);
+  const [camError, setCamError]     = useState(false);
 
-  const callWsRef   = useRef(null);
-  const audioWsRef  = useRef(null);
-  const audioCtxRef = useRef(null);
+  const callWsRef    = useRef(null);
+  const audioWsRef   = useRef(null);
+  const audioCtxRef  = useRef(null);
   const processorRef = useRef(null);
   const streamRef    = useRef(null);
   const timerRef     = useRef(null);
   const durationRef  = useRef(0);
+  const stopRingRef  = useRef(null);
 
-  // ── Connexion WebSocket events d'appel ──────────────────────────────────────
+  // ── WS événements d'appel ─────────────────────────────────────────────────
   useEffect(() => {
-    let ws;
-    let retryTimer;
-
+    let ws, retryTimer;
     const connect = () => {
-      ws = new WebSocket(`${HW_WS_BASE}/ws/call`);
-      callWsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('📡 [INTERCOM] WebSocket call connecté');
-      };
-
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          console.log('📞 [INTERCOM] Event:', msg);
-
-          if (msg.event === 'incoming_call') {
-            setCallState('ringing');
-            // Bip sonore dans le navigateur pour alerter l'opérateur
-            _playRingTone();
-          } else if (msg.event === 'call_ended') {
-            _hangup(false); // false = ne pas renvoyer hangup au ws (évite boucle)
-          }
-        } catch (err) {
-          console.error('[INTERCOM] Parse error:', err);
-        }
-      };
-
-      ws.onclose = () => {
-        console.log('📴 [INTERCOM] WS fermé — reconnexion dans 3s');
-        retryTimer = setTimeout(connect, 3000);
-      };
-
-      ws.onerror = () => ws.close();
+      try {
+        ws = new WebSocket(`${HW_WS_BASE}/ws/call`);
+        callWsRef.current = ws;
+        ws.onmessage = (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            if (msg.event === 'incoming_call') {
+              setCallState('ringing');
+              setCamError(false);
+              setMicError(null);
+              stopRingRef.current = createRingtone();
+            } else if (msg.event === 'call_ended') {
+              _hangup(false);
+            }
+          } catch (_) {}
+        };
+        ws.onclose = () => { retryTimer = setTimeout(connect, 3000); };
+        ws.onerror = () => ws.close();
+      } catch (_) {}
     };
-
     connect();
-    return () => {
-      clearTimeout(retryTimer);
-      ws?.close();
-    };
+    return () => { clearTimeout(retryTimer); ws?.close(); };
   }, []);
 
-  // ── Sonnerie navigateur (Web Audio API) ─────────────────────────────────────
-  const _playRingTone = () => {
-    try {
-      const ctx = new AudioContext();
-      const play = (freq, start, dur) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.3, ctx.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-        osc.start(ctx.currentTime + start);
-        osc.stop(ctx.currentTime + start + dur);
-      };
-      // Mélodie d'appel
-      play(880, 0, 0.15); play(1100, 0.2, 0.15); play(880, 0.4, 0.15); play(1100, 0.6, 0.2);
-      setTimeout(() => ctx.close(), 1500);
-    } catch (e) {
-      console.warn('[INTERCOM] Pas de son navigateur:', e);
-    }
-  };
-
-  // ── Démarrer l'audio streaming PC → Pi ─────────────────────────────────────
+  // ── Audio streaming PC → Jack Pi ──────────────────────────────────────────
   const _startAudioStream = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMicError(window.location.protocol === 'http:' ? 'http_blocked' : 'unavailable');
+      return;
+    }
     try {
-      // 1. Obtenir le micro
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          sampleRate: 16000,
-          echoCancellation: true,
-          noiseSuppression: true,
-        }
+        audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
       });
       streamRef.current = stream;
 
-      // 2. Ouvrir le WebSocket audio
       const audioWs = new WebSocket(`${HW_WS_BASE}/ws/audio`);
       audioWs.binaryType = 'arraybuffer';
       audioWsRef.current = audioWs;
-
-      await new Promise((resolve, reject) => {
-        audioWs.onopen  = resolve;
-        audioWs.onerror = reject;
-        setTimeout(reject, 5000);
+      await new Promise((res, rej) => {
+        audioWs.onopen  = res;
+        audioWs.onerror = () => rej(new Error('WS audio failed'));
+        setTimeout(() => rej(new Error('Timeout')), 5000);
       });
-      console.log('🎙️ [INTERCOM] WebSocket audio ouvert');
 
-      // 3. Capturer le PCM et envoyer
       const audioCtx = new AudioContext({ sampleRate: 16000 });
       audioCtxRef.current = audioCtx;
-
       const source = audioCtx.createMediaStreamSource(stream);
-      // ScriptProcessor : 4096 samples par chunk à 16000Hz ≈ 256ms de latence
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
+      const proc   = audioCtx.createScriptProcessor(4096, 1, 1);
+      processorRef.current = proc;
 
-      processor.onaudioprocess = (e) => {
+      proc.onaudioprocess = (e) => {
         if (audioWs.readyState !== WebSocket.OPEN) return;
-        if (isMuted) return; // micro muet → on envoie quand même du silence
-
-        const float32 = e.inputBuffer.getChannelData(0);
-        // Convertir Float32 → Int16 (format attendu par aplay S16_LE)
-        const int16 = new Int16Array(float32.length);
-        for (let i = 0; i < float32.length; i++) {
-          int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
+        const f32  = e.inputBuffer.getChannelData(0);
+        const i16  = new Int16Array(f32.length);
+        const gain = isMuted ? 0 : 1;
+        for (let i = 0; i < f32.length; i++) {
+          i16[i] = Math.max(-32768, Math.min(32767, Math.round(f32[i] * 32767 * gain)));
         }
-        audioWs.send(int16.buffer);
+        audioWs.send(i16.buffer);
       };
-
-      source.connect(processor);
-      processor.connect(audioCtx.destination);
-
-      console.log('✅ [INTERCOM] Streaming audio démarré (16kHz, mono, S16_LE)');
+      source.connect(proc);
+      proc.connect(audioCtx.destination);
     } catch (err) {
-      console.error('[INTERCOM] Erreur démarrage audio:', err);
-      alert(`Impossible d'accéder au microphone : ${err.message}`);
+      setMicError(err.name === 'NotAllowedError' ? 'denied' : 'error');
     }
   }, [isMuted]);
 
-  // ── Arrêter l'audio streaming ───────────────────────────────────────────────
   const _stopAudioStream = useCallback(() => {
     processorRef.current?.disconnect();
     processorRef.current = null;
@@ -158,11 +152,11 @@ export default function IntercomSystem() {
     streamRef.current = null;
     audioWsRef.current?.close();
     audioWsRef.current = null;
-    console.log('🛑 [INTERCOM] Streaming audio arrêté');
   }, []);
 
-  // ── Décrocher ──────────────────────────────────────────────────────────────
   const answer = useCallback(async () => {
+    stopRingRef.current?.();
+    stopRingRef.current = null;
     setCallState('active');
     durationRef.current = 0;
     setCallDuration(0);
@@ -173,172 +167,245 @@ export default function IntercomSystem() {
     await _startAudioStream();
   }, [_startAudioStream]);
 
-  // ── Raccrocher ─────────────────────────────────────────────────────────────
   const _hangup = useCallback((notifyWs = true) => {
+    stopRingRef.current?.();
+    stopRingRef.current = null;
     setCallState('idle');
+    setMicError(null);
     clearInterval(timerRef.current);
     setCallDuration(0);
     _stopAudioStream();
     if (notifyWs && callWsRef.current?.readyState === WebSocket.OPEN) {
       callWsRef.current.send(JSON.stringify({ action: 'hangup' }));
     }
-    console.log('📴 [INTERCOM] Appel terminé');
   }, [_stopAudioStream]);
 
   const hangup = useCallback(() => _hangup(true), [_hangup]);
 
-  // ── Mute ───────────────────────────────────────────────────────────────────
   const toggleMute = () => {
-    setIsMuted(m => !m);
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach(t => {
-        t.enabled = isMuted; // inverse car setIsMuted est async
-      });
-    }
+    const next = !isMuted;
+    setIsMuted(next);
+    streamRef.current?.getAudioTracks().forEach(t => { t.enabled = !next; });
   };
 
-  // ── Format durée ───────────────────────────────────────────────────────────
-  const fmtDuration = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  const fmt = (s) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 
-  // ── Rien à afficher si pas d'appel ─────────────────────────────────────────
   if (callState === 'idle') return null;
 
+  const isRinging = callState === 'ringing';
+
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0, 0, 0, 0.75)',
-      backdropFilter: 'blur(12px)',
-      animation: 'fadeIn 0.2s ease',
-    }}>
+    <>
       <style>{`
-        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes ring { 
-          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34,197,94,0.6); }
-          50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(34,197,94,0); }
+        @keyframes fadeModal { from{opacity:0;transform:scale(0.94)} to{opacity:1;transform:scale(1)} }
+        @keyframes wave1 { 0%{transform:scale(1);opacity:.7} 100%{transform:scale(2.4);opacity:0} }
+        @keyframes wave2 { 0%{transform:scale(1);opacity:.5} 100%{transform:scale(3.0);opacity:0} }
+        @keyframes wave3 { 0%{transform:scale(1);opacity:.3} 100%{transform:scale(3.6);opacity:0} }
+        @keyframes phoneBounce {
+          0%,100%{transform:rotate(0deg)} 20%{transform:rotate(-12deg)} 40%{transform:rotate(12deg)}
+          60%{transform:rotate(-8deg)} 80%{transform:rotate(8deg)}
         }
-        @keyframes pulse-active {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.5); }
-          50% { box-shadow: 0 0 0 12px rgba(99,102,241,0); }
+        @keyframes activeGlow {
+          0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,.4)}
+          50%    {box-shadow:0 0 0 14px rgba(99,102,241,0)}
         }
       `}</style>
 
+      {/* Backdrop */}
       <div style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-        border: '1px solid rgba(255,255,255,0.12)',
-        borderRadius: 24,
-        padding: '2.5rem 2rem',
-        width: 340,
-        textAlign: 'center',
-        boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
+        position:'fixed', inset:0, zIndex:9999,
+        display:'flex', alignItems:'center', justifyContent:'center',
+        background:'rgba(0,0,0,0.82)', backdropFilter:'blur(16px)',
       }}>
-        {/* Avatar */}
         <div style={{
-          width: 90, height: 90, borderRadius: '50%', margin: '0 auto 1.25rem',
-          background: callState === 'ringing'
-            ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-            : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          animation: callState === 'ringing' ? 'ring 1s infinite' : 'pulse-active 2s infinite',
+          background:'linear-gradient(150deg,#0f172a,#1a2540)',
+          border:'1px solid rgba(255,255,255,0.1)',
+          borderRadius:28,
+          width: isRinging ? 340 : 400,
+          overflow:'hidden',
+          boxShadow:'0 40px 100px rgba(0,0,0,0.8)',
+          animation:'fadeModal 0.25s cubic-bezier(0.34,1.56,0.64,1)',
         }}>
-          <Phone size={38} color="#fff" />
-        </div>
 
-        {/* Titre */}
-        <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.3rem', fontWeight: 700, color: '#f1f5f9' }}>
-          {callState === 'ringing' ? '🔔 Appel entrant' : '📞 Appel en cours'}
-        </h2>
+          {/* ── Caméra USB (appel actif seulement) ── */}
+          {!isRinging && (
+            <div style={{ position:'relative', background:'#000', aspectRatio:'16/9' }}>
+              {!camError ? (
+                <img
+                  src={CAM_USB_URL}
+                  alt="Caméra USB"
+                  onError={() => setCamError(true)}
+                  style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+                />
+              ) : (
+                <div style={{
+                  display:'flex', flexDirection:'column',
+                  alignItems:'center', justifyContent:'center',
+                  height:200, gap:'0.5rem', color:'#475569',
+                }}>
+                  <Camera size={36} />
+                  <span style={{fontSize:'0.8rem'}}>Caméra USB hors ligne</span>
+                  <button
+                    onClick={() => setCamError(false)}
+                    style={{fontSize:'0.75rem',color:'#6366f1',background:'none',border:'none',cursor:'pointer'}}
+                  >↻ Réessayer</button>
+                </div>
+              )}
 
-        {/* Sous-titre */}
-        <p style={{ margin: '0 0 0.5rem', color: '#94a3b8', fontSize: '0.875rem' }}>
-          {callState === 'ringing' ? 'Barrière PI2P — Raspberry Pi' : `Durée : ${fmtDuration(callDuration)}`}
-        </p>
+              {/* Badge durée */}
+              <div style={{
+                position:'absolute', top:10, left:12,
+                background:'rgba(0,0,0,0.65)', borderRadius:8,
+                padding:'3px 10px', fontSize:'0.75rem',
+                color:'#f1f5f9', display:'flex', alignItems:'center', gap:6,
+              }}>
+                <span style={{
+                  width:7, height:7, borderRadius:'50%',
+                  background:'#ef4444', boxShadow:'0 0 5px #ef4444',
+                  display:'inline-block',
+                }}/>
+                {fmt(callDuration)}
+              </div>
 
-        {callState === 'active' && (
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-            padding: '0.2rem 0.75rem', borderRadius: 99,
-            background: isMuted ? '#ef444420' : '#22c55e20',
-            border: `1px solid ${isMuted ? '#ef444450' : '#22c55e50'}`,
-            color: isMuted ? '#f87171' : '#4ade80',
-            fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.25rem',
-          }}>
-            {isMuted ? <MicOff size={12} /> : <Mic size={12} />}
-            {isMuted ? 'Micro coupé' : 'Micro actif — audio → jack Pi'}
-          </div>
-        )}
-
-        {callState === 'ringing' && (
-          <p style={{ margin: '0.25rem 0 0', color: '#64748b', fontSize: '0.75rem' }}>
-            Audio du PC → Jack 3.5mm Pi
-          </p>
-        )}
-
-        {/* Boutons */}
-        <div style={{
-          display: 'flex', gap: '1rem', justifyContent: 'center',
-          marginTop: '2rem',
-        }}>
-          {/* Décrocher (sonnerie) ou Mute (actif) */}
-          {callState === 'ringing' ? (
-            <button
-              onClick={answer}
-              style={{
-                width: 68, height: 68, borderRadius: '50%', border: 'none',
-                background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-                color: '#fff', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 20px rgba(34,197,94,0.5)',
-                transition: 'transform 0.15s ease',
-              }}
-              onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
-              onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-            >
-              <Phone size={28} />
-            </button>
-          ) : (
-            <button
-              onClick={toggleMute}
-              title={isMuted ? 'Réactiver le micro' : 'Couper le micro'}
-              style={{
-                width: 68, height: 68, borderRadius: '50%', border: 'none',
-                background: isMuted ? 'rgba(239,68,68,0.2)' : 'rgba(99,102,241,0.2)',
-                border: `2px solid ${isMuted ? '#ef4444' : '#6366f1'}`,
-                color: isMuted ? '#ef4444' : '#6366f1', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {isMuted ? <MicOff size={26} /> : <Mic size={26} />}
-            </button>
+              {/* Badge micro */}
+              <div style={{
+                position:'absolute', top:10, right:12,
+                background: isMuted ? 'rgba(239,68,68,0.85)' : 'rgba(99,102,241,0.85)',
+                borderRadius:8, padding:'3px 10px',
+                fontSize:'0.72rem', color:'#fff',
+                display:'flex', alignItems:'center', gap:5,
+              }}>
+                {isMuted ? <MicOff size={11}/> : <Mic size={11}/>}
+                {isMuted ? 'Micro coupé' : 'Audio → Pi'}
+              </div>
+            </div>
           )}
 
-          {/* Raccrocher */}
-          <button
-            onClick={hangup}
-            style={{
-              width: 68, height: 68, borderRadius: '50%', border: 'none',
-              background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-              color: '#fff', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 20px rgba(239,68,68,0.4)',
-              transition: 'transform 0.15s ease',
-            }}
-            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
-            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            <PhoneOff size={28} />
-          </button>
-        </div>
+          {/* ── Corps de la modal ── */}
+          <div style={{ padding:'1.75rem 1.75rem 2rem', textAlign:'center' }}>
 
-        {/* Info */}
-        {callState === 'ringing' && (
-          <p style={{ marginTop: '1.5rem', fontSize: '0.7rem', color: '#475569' }}>
-            <Volume2 size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-            En décrochant, votre micro est envoyé sur le jack du Pi
-          </p>
-        )}
+            {/* Avatar + ondes (sonnerie) */}
+            <div style={{ position:'relative', width:90, height:90, margin:'0 auto 1.25rem' }}>
+              {isRinging && [
+                {anim:'wave1 1.8s ease-out infinite',   color:'rgba(34,197,94,0.2)'},
+                {anim:'wave2 1.8s ease-out .35s infinite', color:'rgba(34,197,94,0.13)'},
+                {anim:'wave3 1.8s ease-out .7s infinite',  color:'rgba(34,197,94,0.07)'},
+              ].map((w,i) => (
+                <div key={i} style={{
+                  position:'absolute', inset:0, borderRadius:'50%',
+                  background:w.color, animation:w.anim,
+                }}/>
+              ))}
+
+              <div style={{
+                position:'relative', zIndex:1,
+                width:90, height:90, borderRadius:'50%',
+                background: isRinging
+                  ? 'linear-gradient(135deg,#22c55e,#16a34a)'
+                  : 'linear-gradient(135deg,#6366f1,#4f46e5)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                animation: isRinging
+                  ? 'phoneBounce 0.5s ease-in-out 0s 2' // rebond au démarrage
+                  : 'activeGlow 2s infinite',
+                boxShadow: isRinging
+                  ? '0 8px 30px rgba(34,197,94,0.5)'
+                  : '0 8px 30px rgba(99,102,241,0.45)',
+              }}>
+                <Phone size={38} color="#fff" />
+              </div>
+            </div>
+
+            {/* Titre */}
+            <h2 style={{margin:'0 0 0.25rem', fontSize:'1.25rem', fontWeight:700, color:'#f1f5f9'}}>
+              {isRinging ? '📞 Appel entrant' : 'En communication'}
+            </h2>
+            <p style={{margin:0, color:'#64748b', fontSize:'0.85rem'}}>
+              Barrière PI2P — Raspberry Pi
+            </p>
+
+            {/* Erreur micro */}
+            {micError && (
+              <div style={{
+                margin:'1rem 0 0', padding:'0.75rem', borderRadius:10,
+                background:'#7c341520', border:'1px solid #f9731640',
+                fontSize:'0.73rem', color:'#fdba74', textAlign:'left', lineHeight:1.7,
+              }}>
+                {micError === 'http_blocked' ? <>
+                  <strong>🔒 Micro bloqué (HTTP)</strong><br/>
+                  Chrome → <code style={{background:'#0f172a',padding:'1px 4px',borderRadius:4}}>
+                    chrome://flags/#unsafely-treat-insecure-origin-as-secure
+                  </code><br/>
+                  → Ajoute <code style={{background:'#0f172a',padding:'1px 4px',borderRadius:4}}>
+                    http://192.168.137.94
+                  </code> → Relance Chrome
+                </> : micError === 'denied'
+                  ? '🚫 Accès micro refusé dans le navigateur.'
+                  : '❌ Micro indisponible.'}
+              </div>
+            )}
+
+            {/* Boutons */}
+            <div style={{display:'flex', gap:'1.5rem', justifyContent:'center', marginTop:'1.75rem'}}>
+              {isRinging ? (
+                <RoundBtn onClick={answer} color="#22c55e" shadow="rgba(34,197,94,0.5)" label="Décrocher">
+                  <Phone size={30}/>
+                </RoundBtn>
+              ) : (
+                <RoundBtn
+                  onClick={toggleMute}
+                  color={isMuted ? '#ef4444' : '#6366f1'}
+                  shadow={isMuted ? 'rgba(239,68,68,.4)' : 'rgba(99,102,241,.4)'}
+                  label={isMuted ? 'Activer micro' : 'Muter'}
+                  outline
+                >
+                  {isMuted ? <MicOff size={26}/> : <Mic size={26}/>}
+                </RoundBtn>
+              )}
+
+              <RoundBtn onClick={hangup} color="#ef4444" shadow="rgba(239,68,68,0.5)" label="Raccrocher">
+                <PhoneOff size={30}/>
+              </RoundBtn>
+            </div>
+
+            {isRinging && (
+              <p style={{marginTop:'1.25rem', fontSize:'0.7rem', color:'#475569'}}>
+                <Volume2 size={11} style={{verticalAlign:'middle', marginRight:4}}/>
+                Votre voix sera transmise sur le haut-parleur Pi (jack 3.5mm)
+              </p>
+            )}
+          </div>
+        </div>
       </div>
+    </>
+  );
+}
+
+function RoundBtn({ onClick, color, shadow, label, children, outline = false }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'0.4rem'}}>
+      <button
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        title={label}
+        style={{
+          width:70, height:70, borderRadius:'50%',
+          border: outline ? `2px solid ${color}` : 'none',
+          background: outline
+            ? (hover ? `${color}25` : `${color}12`)
+            : `linear-gradient(135deg, ${color}, ${color}bb)`,
+          color: outline ? color : '#fff',
+          cursor:'pointer',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          boxShadow: hover ? `0 8px 28px ${shadow}` : `0 4px 14px ${shadow}70`,
+          transform: hover ? 'scale(1.1)' : 'scale(1)',
+          transition:'all 0.15s ease',
+        }}
+      >
+        {children}
+      </button>
+      <span style={{fontSize:'0.68rem', color:'#64748b'}}>{label}</span>
     </div>
   );
 }

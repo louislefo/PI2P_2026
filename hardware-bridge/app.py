@@ -193,8 +193,15 @@ call_button.when_pressed = call_manager.trigger_call
 # ── Helpers servo ─────────────────────────────────────────────────────────────
 
 def _angle_to_servo_value(angle: int) -> float:
-    """0° → +1.0 (FERMÉ), 90° → 0.0 (OUVERT), 180° → -1.0."""
-    return 1.0 - (angle / 90.0)
+    """
+    Convertit angle (0-180°) en valeur gpiozero (-1.0 à +1.0).
+
+    Convention physique :
+      angle   0  → value = -1.0 → impulsion min 0.5ms → position 0°  (FERMÉ)
+      angle  90  → value =  0.0 → impulsion ctr 1.5ms → position 90° (OUVERT)
+      angle 180  → value = +1.0 → impulsion max 2.5ms → position 180°
+    """
+    return (angle / 90.0) - 1.0
 
 def _move_servo(angle: int):
     global _servo_angle
@@ -408,7 +415,6 @@ def control_servo(angle: int, auto_close: bool = False, delay: int = 5):
         "is_open": angle >= 45,
         "auto_close": auto_close,
     }
-
 class AudioRequest(BaseModel):
     freq: int = 880
     duration: float = 0.5
