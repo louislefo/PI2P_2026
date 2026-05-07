@@ -51,8 +51,9 @@ async def trigger_access(req: AccessRequest):
     if cfg.get("gate_mode", "auto") == "auto":
         import requests
         try:
-            requests.post("http://192.168.137.94:8083/servo/90?auto_close=true&delay=5", timeout=2)
-            print("✅ [SYSTEM] Barrière ouverte via Hardware Bridge (IA)")
+            delay = cfg.get("gate_open_time", 5)
+            requests.post(f"http://192.168.137.94:8083/servo/90?auto_close=true&delay={delay}", timeout=2)
+            print(f"✅ [SYSTEM] Barrière ouverte via Hardware Bridge (IA) - {delay}s")
         except Exception as e:
             print(f"❌ [SYSTEM] Erreur ouverture barrière: {e}")
     return {"status": "success"}
@@ -72,8 +73,9 @@ async def open_door():
     if cfg.get("gate_mode", "auto") == "auto":
         import requests
         try:
-            requests.post("http://192.168.137.94:8083/servo/90?auto_close=true&delay=5", timeout=2)
-            print("✅ [SYSTEM] Barrière ouverte via Hardware Bridge (Manuel)")
+            delay = cfg.get("gate_open_time", 5)
+            requests.post(f"http://192.168.137.94:8083/servo/90?auto_close=true&delay={delay}", timeout=2)
+            print(f"✅ [SYSTEM] Barrière ouverte via Hardware Bridge (Manuel) - {delay}s")
         except Exception as e:
             print(f"❌ [SYSTEM] Erreur ouverture barrière: {e}")
     return {"status": "success", "message": "Door opened manually"}

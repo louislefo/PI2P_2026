@@ -22,8 +22,8 @@ RUN pip install --no-cache-dir \
     pydantic
 
 
-COPY app.py .
+COPY . .
 
 EXPOSE 8083
 
-CMD ["python", "-u", "app.py"]
+CMD ["python", "-u", "main.py"]

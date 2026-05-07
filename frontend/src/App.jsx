@@ -141,7 +141,7 @@ function App() {
   return (
     <div className="app-shell">
       {/* Interphone — flottant sur toutes les pages */}
-      <IntercomSystem />
+      <IntercomSystem openDoor={openDoor} />
 
       <Sidebar 
         currentView={currentView}

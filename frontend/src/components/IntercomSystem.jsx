@@ -55,7 +55,7 @@ function createRingtone() {
   };
 }
 
-export default function IntercomSystem() {
+export default function IntercomSystem({ openDoor }) {
   const [callState, setCallState]   = useState('idle'); // idle | ringing | active
   const [isMuted, setIsMuted]       = useState(false);
   const [callDuration, setCallDuration] = useState(0);
@@ -289,8 +289,14 @@ export default function IntercomSystem() {
 
   const openBarrier = async () => {
     try {
-      await fetch('http://192.168.137.94:8083/servo/90?auto_close=true&delay=5', { method: 'POST' });
-      console.log('Barrière ouverte depuis l\'interphone');
+      if (openDoor) {
+        await openDoor();
+        console.log('Barrière ouverte depuis l\'interphone (via Backend)');
+      } else {
+        // Fallback (ne devrait plus servir)
+        await fetch('http://192.168.137.94:8083/servo/90?auto_close=true&delay=5', { method: 'POST' });
+        console.log('Barrière ouverte depuis l\'interphone (via Pi)');
+      }
     } catch (err) {
       console.error('Erreur lors de l\'ouverture de la barrière', err);
     }
