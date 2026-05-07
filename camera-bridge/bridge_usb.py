@@ -16,18 +16,34 @@ frame_event = threading.Event()
 
 def capture_loop():
     global latest_frame
-    cap = cv2.VideoCapture(1, cv2.CAP_V4L2)
-    # Optimisation pour webcam standard
-    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    
+    def try_open_camera():
+        # On teste d'abord 1 et 2 (les ports typiques de la webcam USB sur Raspberry), puis 0 en dernier recours
+        for index in [1, 2, 0, 3]:
+            print(f"🎥 [BRIDGE-USB] Test de la caméra index {index}...", flush=True)
+            cap = cv2.VideoCapture(index, cv2.CAP_V4L2)
+            if cap.isOpened():
+                # Optimisations pour la webcam
+                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                
+                # Test de lecture pour s'assurer que ça marche vraiment
+                ret, _ = cap.read()
+                if ret:
+                    print(f"✅ [BRIDGE-USB] Succès ! Caméra USB connectée sur l'index {index}", flush=True)
+                    return cap
+                cap.release()
+        return None
+
+    cap = try_open_camera()
 
     while True:
-        if not cap.isOpened():
-            print("🎥 [BRIDGE-USB] Lancement OpenCV capture USB...", flush=True)
-            cap.open(1, cv2.CAP_V4L2)
+        if cap is None or not cap.isOpened():
+            print("⚠️ [BRIDGE-USB] Aucune caméra fonctionnelle trouvée, nouvel essai dans 2s...", flush=True)
             time.sleep(2)
+            cap = try_open_camera()
             continue
             
         ret, frame = cap.read()
