@@ -1,0 +1,7 @@
+pi 4
+
+led verte : Gpio 17 / 13
+led orange : Gpio 17 / 11
+led rouge : Gpio 22 / 15
+
+servomoteur  : Gpio 12 / pwm 0 / 32

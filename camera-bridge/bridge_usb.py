@@ -16,7 +16,7 @@ frame_event = threading.Event()
 
 def capture_loop():
     global latest_frame
-    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+    cap = cv2.VideoCapture(1, cv2.CAP_V4L2)
     # Optimisation pour webcam standard
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
@@ -26,7 +26,7 @@ def capture_loop():
     while True:
         if not cap.isOpened():
             print("🎥 [BRIDGE-USB] Lancement OpenCV capture USB...", flush=True)
-            cap.open(0, cv2.CAP_V4L2)
+            cap.open(1, cv2.CAP_V4L2)
             time.sleep(2)
             continue
             
