@@ -3,7 +3,7 @@ import { DoorOpen, PhoneCall, BarChart3, Clock, Camera, Maximize, RefreshCcw } f
 import { isAuthorized, formatDate } from '../../utils/helpers';
 
 export default function DashboardView({ 
-  status, history, plates, openDoor, API_BASE, setCurrentView 
+  status, history, plates, openDoor, API_BASE, config, setCurrentView 
 }) {
   const [videoError, setVideoError] = useState(false);
   const [activeCam, setActiveCam] = useState('CAM_01_IN');
@@ -37,6 +37,25 @@ export default function DashboardView({
           <DoorOpen size={16} />
           {status.door_open ? 'Portail Ouvert' : 'Portail Fermé'}
         </div>
+      </div>
+
+      {/* ─── Mode Barrière Banner ─── */}
+      <div style={{
+        backgroundColor: config?.gate_mode === 'always_open' ? '#f59e0b' : config?.gate_mode === 'always_closed' ? '#ef4444' : '#3b82f6',
+        color: 'white',
+        padding: '0.5rem 1rem',
+        borderRadius: '8px',
+        marginBottom: '1rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 'bold',
+        gap: '8px',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+      }}>
+        {config?.gate_mode === 'always_open' ? '⚠️ MODE OUVERTURE PERMANENTE (Force Ouvert)' : 
+         config?.gate_mode === 'always_closed' ? '🔒 MODE BLOCAGE PERMANENT (Force Fermé)' : 
+         '🤖 MODE AUTOMATIQUE (IA Activée)'}
       </div>
 
       {/* ─── Video & Side Controls ─── */}

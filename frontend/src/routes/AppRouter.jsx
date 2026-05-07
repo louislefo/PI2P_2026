@@ -29,6 +29,7 @@ export default function AppRouter({
           plates={plates}
           openDoor={openDoor}
           API_BASE={API_BASE}
+          config={config}
           setCurrentView={setCurrentView}
         />
       );
@@ -69,6 +70,7 @@ export default function AppRouter({
           plates={plates}
           openDoor={openDoor}
           API_BASE={API_BASE}
+          config={config}
           setCurrentView={setCurrentView}
         />
       );

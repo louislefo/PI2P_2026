@@ -1,9 +1,30 @@
 import asyncio
 import subprocess
+import re
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Set
 
 router = APIRouter(tags=["Intercom"])
+
+def find_mic_device() -> str:
+    """Recherche le périphérique d'enregistrement USB (ou autre) via arecord -l"""
+    try:
+        res = subprocess.run(["arecord", "-l"], capture_output=True, text=True)
+        # Cherche une ligne du genre "card 1: ... device 0: ..."
+        # On essaie de privilégier un périphérique USB
+        matches = re.findall(r"card (\d+):.*?device (\d+):", res.stdout)
+        if matches:
+            # S'il y a plusieurs cartes, on prend la dernière en espérant que ce soit l'USB
+            # (la carte 0 est souvent la sortie jack/HDMI interne, bien qu'elle n'ait pas de micro)
+            card, device = matches[-1]
+            dev_name = f"plughw:{card},{device}"
+            print(f"🎤 [MIC-WS] Microphone auto-détecté : {dev_name}")
+            return dev_name
+    except Exception as e:
+        print(f"⚠️ [MIC-WS] Erreur détection micro : {e}")
+    
+    print("⚠️ [MIC-WS] Aucun micro détecté dynamiquement, essai de 'default'")
+    return "default"
 
 class CallManager:
     def __init__(self):
@@ -121,17 +142,20 @@ async def ws_mic(ws: WebSocket):
     
     proc = None
     try:
-        # Essai avec plughw:1,0 (webcam USB typique sur Pi)
-        # S'il n'y a pas de son, on pourrait implémenter un fallback dynamique avec "arecord -l"
+        # Auto-détection du périphérique (ex: plughw:1,0)
+        device = find_mic_device()
+        
         proc = await asyncio.create_subprocess_exec(
-            "arecord", "-D", "plughw:1,0", "-f", "S16_LE", "-r", "16000", "-c", "1", "-",
+            "arecord", "-D", device, "-f", "S16_LE", "-r", "16000", "-c", "1", "-",
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL
+            stderr=asyncio.subprocess.PIPE  # On capte stderr pour voir les erreurs ALSA
         )
         
         while True:
             data = await proc.stdout.read(4096)
             if not data:
+                stderr_output = await proc.stderr.read()
+                print(f"❌ [MIC-WS] arecord a terminé prématurément. stderr: {stderr_output.decode(errors='ignore')}")
                 break
             await ws.send_bytes(data)
             

@@ -18,6 +18,7 @@ class PlateRequest(BaseModel):
 class SettingsRequest(BaseModel):
     entry_code: Optional[str] = None
     gate_mode: Optional[str] = None
+    gate_open_time: Optional[int] = None
     detection_objects: Optional[list[str]] = None
 
 @router.get("")
@@ -38,11 +39,18 @@ def update_settings(data: SettingsRequest):
         
         # Trigger matériel si on change le mode
         if new_mode != old_mode:
-            from core.hardware import relay
-            if new_mode == "always_open":
-                relay.on()
-            else:
-                relay.off()
+            import requests
+            try:
+                if new_mode == "always_open":
+                    requests.post("http://192.168.137.94:8083/servo/90", timeout=2)
+                else:
+                    # 'auto' ou 'always_closed' -> on ferme la barrière
+                    requests.post("http://192.168.137.94:8083/servo/0", timeout=2)
+            except Exception as e:
+                print(f"⚠️ [CONFIG] Impossible de changer l'état physique de la barrière: {e}")
+                
+    if data.gate_open_time is not None:
+        cfg["gate_open_time"] = data.gate_open_time
     
     # Changement du code d'entrée
     if data.entry_code is not None:

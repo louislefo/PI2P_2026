@@ -10,5 +10,6 @@
         "car",
         "bicycle",
         "person"
-    ]
+    ],
+    "gate_open_time": 5
 }
