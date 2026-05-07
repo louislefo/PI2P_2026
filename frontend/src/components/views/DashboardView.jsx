@@ -28,6 +28,18 @@ export default function DashboardView({
     setStreamKey(Date.now());
   };
 
+  const simulateCall = () => {
+    try {
+      const ws = new WebSocket(`ws://192.168.137.94:8083/ws/call`);
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ action: 'test' }));
+        setTimeout(() => ws.close(), 500);
+      };
+    } catch(err) {
+      console.error("Erreur simulateCall:", err);
+    }
+  };
+
   return (
     <>
       {/* ─── Status Banner ─── */}
@@ -83,9 +95,9 @@ export default function DashboardView({
                 style={{
                   position: 'absolute',
                   bottom: '16px',
-                  right: '50px',
-                  width: '120px',
-                  height: '90px',
+                  left: '16px',
+                  width: '180px',
+                  height: '135px',
                   border: '2px solid rgba(255,255,255,0.5)',
                   borderRadius: '8px',
                   overflow: 'hidden',
@@ -156,7 +168,7 @@ export default function DashboardView({
             <span className="btn-sublabel">Manuel</span>
           </button>
 
-          <button className="side-ctrl-btn call" title="Appel Gardien">
+          <button className="side-ctrl-btn call" title="Appel Gardien" onClick={simulateCall}>
             <PhoneCall size={28} />
             <span>Appel SOS</span>
           </button>

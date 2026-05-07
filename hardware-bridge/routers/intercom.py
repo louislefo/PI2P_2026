@@ -3,6 +3,7 @@ import subprocess
 import re
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Set
+from core.audio import play_wav_loop, stop_wav_loop, play_pattern
 
 router = APIRouter(tags=["Intercom"])
 
@@ -62,6 +63,7 @@ class CallManager:
             return
         self.call_active = True
         print("🔔 [CALL] Bouton pressé → Appel entrant !")
+        play_wav_loop("data/attente.wav")
         asyncio.run_coroutine_threadsafe(
             self.broadcast({"event": "incoming_call", "call_active": True}),
             loop,
@@ -69,6 +71,7 @@ class CallManager:
 
     def end_call(self, loop):
         self.call_active = False
+        stop_wav_loop()
         if loop:
             asyncio.run_coroutine_threadsafe(
                 self.broadcast({"event": "call_ended", "call_active": False}),
@@ -100,6 +103,10 @@ async def ws_call(ws: WebSocket):
 async def ws_audio(ws: WebSocket):
     await ws.accept()
     print("🎙️ [AUDIO-WS] Connexion audio reçue — démarrage aplay stdin...")
+    
+    # L'appel a été décroché (le frontend se connecte à l'audio)
+    stop_wav_loop()
+    play_pattern("success")
 
     proc = None
     try:

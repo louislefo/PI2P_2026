@@ -60,3 +60,50 @@ def play_pattern(pattern_name: str, freq: int = 880):
                 time.sleep(0.08)
                 
     threading.Thread(target=_play, daemon=True).start()
+
+_loop_proc = None
+_loop_active = False
+
+def play_wav_loop(filepath: str):
+    global _loop_proc, _loop_active
+    if not os.path.exists(filepath):
+        print(f"❌ [AUDIO] Fichier introuvable : {filepath}")
+        return
+        
+    stop_wav_loop()
+    _loop_active = True
+    print(f"🔊 [AUDIO] Lecture en boucle de {filepath}...")
+    
+    def _loop():
+        global _loop_proc
+        while _loop_active:
+            try:
+                _loop_proc = subprocess.Popen(
+                    ["aplay", "-D", "plughw:0,0", filepath],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                _loop_proc.wait()
+                # Si aplay echoue avec plughw, on essaie sans
+                if _loop_proc.returncode != 0 and _loop_active:
+                    _loop_proc = subprocess.Popen(
+                        ["aplay", filepath],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    _loop_proc.wait()
+            except Exception as e:
+                print(f"❌ [AUDIO] Erreur boucle: {e}")
+                break
+
+    threading.Thread(target=_loop, daemon=True).start()
+
+def stop_wav_loop():
+    global _loop_proc, _loop_active
+    _loop_active = False
+    if _loop_proc and _loop_proc.poll() is None:
+        try:
+            _loop_proc.terminate()
+        except Exception:
+            pass
+    _loop_proc = None
