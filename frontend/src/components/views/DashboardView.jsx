@@ -7,6 +7,8 @@ export default function DashboardView({
 }) {
   const [videoError, setVideoError] = useState(false);
   const [activeCam, setActiveCam] = useState('CAM_01_IN');
+  const [streamKey, setStreamKey] = useState(Date.now());
+  const inactiveCam = activeCam === 'CAM_01_IN' ? 'CAM_02_OUT' : 'CAM_01_IN';
   const videoRef = useRef(null);
 
   const authorizedCount = history.filter(h => isAuthorized(h.status)).length;
@@ -22,8 +24,8 @@ export default function DashboardView({
     }
   };
 
-  const switchCamera = () => {
-    setActiveCam(prev => prev === 'CAM_01_IN' ? 'CAM_02_OUT' : 'CAM_01_IN');
+  const refreshStream = () => {
+    setStreamKey(Date.now());
   };
 
   return (
@@ -66,10 +68,42 @@ export default function DashboardView({
           <div className="video-frame" ref={videoRef}>
             {!videoError && (
               <img
-                src={`${API_BASE}/video_feed?cam=${activeCam}`}
+                src={`${API_BASE}/video_feed?cam=${activeCam}&t=${streamKey}`}
                 alt={`Flux ${activeCam} + OCR`}
                 onError={() => setVideoError(true)}
               />
+            )}
+
+            {/* PiP Inactive Cam */}
+            {!videoError && (
+              <div 
+                className="pip-camera" 
+                onClick={() => setActiveCam(inactiveCam)}
+                title="Basculer vers cette caméra"
+                style={{
+                  position: 'absolute',
+                  bottom: '16px',
+                  right: '50px',
+                  width: '120px',
+                  height: '90px',
+                  border: '2px solid rgba(255,255,255,0.5)',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 10px rgba(0,0,0,0.5)',
+                  zIndex: 10,
+                  transition: 'border-color 0.2s',
+                  backgroundColor: 'black'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.borderColor = 'white'}
+                onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'}
+              >
+                <img 
+                  src={`${API_BASE}/video_feed?cam=${inactiveCam}&t=${streamKey}`} 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                  alt="Caméra secondaire"
+                />
+              </div>
             )}
 
             {/* LIVE Badge */}
@@ -80,10 +114,10 @@ export default function DashboardView({
               </div>
             )}
 
-            {/* Switch Camera Button (Top Right) */}
+            {/* Refresh Button (Top Right) */}
             {!videoError && (
               <div className="video-overlay-top-right">
-                <button className="glass-btn" title="Changer de caméra" onClick={switchCamera}>
+                <button className="glass-btn" title="Rafraîchir les flux" onClick={refreshStream}>
                   <RefreshCcw size={18} />
                 </button>
               </div>
@@ -110,9 +144,15 @@ export default function DashboardView({
 
         {/* Side Controls (Right of Video) */}
         <div className="side-controls">
-          <button className="side-ctrl-btn barrier" onClick={openDoor}>
-            <DoorOpen size={32} />
-            <span>Ouvrir Barrière</span>
+          <button 
+            className={`side-ctrl-btn barrier ${status.door_open ? 'open' : ''}`} 
+            onClick={openDoor}
+            style={status.door_open ? { backgroundColor: 'rgba(34, 197, 94, 0.2)', borderColor: '#22c55e' } : {}}
+          >
+            <DoorOpen size={32} color={status.door_open ? '#22c55e' : 'white'} />
+            <span style={{ color: status.door_open ? '#22c55e' : 'white' }}>
+              {status.door_open ? 'Barrière Ouverte' : 'Ouvrir Barrière'}
+            </span>
             <span className="btn-sublabel">Manuel</span>
           </button>
 
@@ -137,6 +177,10 @@ export default function DashboardView({
             <div className="stat-row">
               <span className="stat-label">Entrées Totales</span>
               <span className="stat-value highlight">{history.length}</span>
+            </div>
+            <div className="stat-row" style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+              <span className="stat-label">Véhicules Analysés</span>
+              <span className="stat-value" style={{ color: '#60a5fa' }}>{status.tested_cars || 0}</span>
             </div>
             <div className="stat-bar">
               <div className="stat-bar-fill" style={{ width: `${authRate}%` }}></div>

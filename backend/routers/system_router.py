@@ -16,9 +16,21 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             await asyncio.sleep(1)
+            # Récupérer l'état réel depuis le Raspberry Pi
+            import requests
+            try:
+                # Requête asynchrone / courte pour ne pas bloquer trop longtemps
+                resp = await asyncio.to_thread(requests.get, "http://192.168.137.94:8083/status", timeout=0.5)
+                hw_state = resp.json()
+                door_open = hw_state.get("servo", {}).get("is_open", False)
+            except Exception:
+                door_open = False
+                
+            from services.vision import processor
             state = {
-                "door_open": bool(relay.value),
-                "car_present": bool(door_sensor.is_pressed)
+                "door_open": door_open,
+                "car_present": False,
+                "tested_cars": processor.tested_cars_count
             }
             await websocket.send_json({"type": "status", "data": state})
     except Exception:

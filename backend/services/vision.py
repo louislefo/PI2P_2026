@@ -20,6 +20,7 @@ class VisionProcessor:
         self.thread = None
         self.latest_frame = None
         self.lock = threading.Lock()
+        self.tested_cars_count = 0
         
         print("🤖 [VISION] Chargement du Modèle YOLO pour Détection Véhicules...")
         try:
@@ -180,8 +181,9 @@ class VisionProcessor:
                                 car_roi = frame[y1:y2, x1:x2]
 
                                 if car_roi.shape[0] > 10 and car_roi.shape[1] > 10:
+                                    self.tested_cars_count += 1
                                     obj_name = "Voiture" if cls_id == 2 else "Moto/Camion"
-                                    print(f"🚙 [INFO] {obj_name} détectée ! Tentative de lecture de plaque...")
+                                    print(f"🚙 [INFO] {obj_name} détectée ! Tentative de lecture de plaque (Analyse #{self.tested_cars_count})...")
                                     import os
                                     os.makedirs("data/debug_ocr", exist_ok=True)
                                     gray = cv2.cvtColor(car_roi, cv2.COLOR_BGR2GRAY)
