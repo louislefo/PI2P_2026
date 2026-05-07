@@ -8,6 +8,12 @@ Expose une API REST pour contrôler :
   - Audio jack (aplay)
 
 Port : 8083
+
+Logique servo :
+  - angle 0   = FERMÉ (barrière en bas)
+  - angle 90  = OUVERT (barrière levée)
+  - Après positionnement → détachement du signal PWM (servo.value = None)
+    pour éviter le jitter (tremblement) en position maintenue.
 """
 
 import os
@@ -23,7 +29,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="PI2P Hardware Bridge", version="1.0")
+app = FastAPI(title="PI2P Hardware Bridge", version="1.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,52 +38,76 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── GPIO Setup ───────────────────────────────────────────────────────────────
+# ── GPIO Setup ────────────────────────────────────────────────────────────────
 
-# Pins BCM
 PIN_LED_GREEN  = int(os.environ.get("PIN_LED_GREEN",  "27"))  # Board 13
 PIN_LED_ORANGE = int(os.environ.get("PIN_LED_ORANGE", "17"))  # Board 11
 PIN_LED_RED    = int(os.environ.get("PIN_LED_RED",    "22"))  # Board 15
 PIN_SERVO      = int(os.environ.get("PIN_SERVO",      "12"))  # Board 32 / PWM0
 
+# Délai avant détachement du servo (ms) → stoppe le jitter
+SERVO_DETACH_DELAY = float(os.environ.get("SERVO_DETACH_DELAY_S", "0.6"))
+
+print("=" * 55)
+print("🚀 [HW-BRIDGE] Démarrage Hardware Bridge v1.1")
+print(f"   LED Verte  → BCM{PIN_LED_GREEN}  (Board 13)")
+print(f"   LED Orange → BCM{PIN_LED_ORANGE}  (Board 11)")
+print(f"   LED Rouge  → BCM{PIN_LED_RED}  (Board 15)")
+print(f"   Servo      → BCM{PIN_SERVO}  (Board 32 / PWM0)")
+print(f"   Détachement servo après {SERVO_DETACH_DELAY}s")
+print("=" * 55)
+
 try:
     if sys.platform == "win32":
-        raise ImportError("Windows détecté → Mock GPIO")
+        raise ImportError("Windows détecté → Mock GPIO activé")
     from gpiozero import LED, Servo
     from gpiozero.pins.lgpio import LGPIOFactory
     factory = LGPIOFactory()
-    
+
     led_green  = LED(PIN_LED_GREEN,  pin_factory=factory)
     led_orange = LED(PIN_LED_ORANGE, pin_factory=factory)
     led_red    = LED(PIN_LED_RED,    pin_factory=factory)
-    # Servo gpiozero : value -1 (0°) à +1 (180°), 0 = 90°
-    servo = Servo(PIN_SERVO, pin_factory=factory, min_pulse_width=0.5/1000, max_pulse_width=2.5/1000)
+
+    # min_pulse_width=0.5ms, max_pulse_width=2.5ms → plage classique SG90
+    servo = Servo(
+        PIN_SERVO,
+        pin_factory=factory,
+        min_pulse_width=0.5 / 1000,
+        max_pulse_width=2.5 / 1000,
+    )
     GPIO_AVAILABLE = True
-    print(f"✅ [HW-BRIDGE] GPIO initialisé (lgpio) — LEDs: {PIN_LED_GREEN}/{PIN_LED_ORANGE}/{PIN_LED_RED}, Servo: {PIN_SERVO}")
+    print(f"✅ [HW-BRIDGE] GPIO lgpio initialisé avec succès")
 
 except Exception as e:
-    print(f"⚠️ [HW-BRIDGE] {e} → Mock GPIO activé")
+    print(f"⚠️ [HW-BRIDGE] GPIO indisponible : {e}")
+    print("⚠️ [HW-BRIDGE] Mode MOCK activé — les commandes seront simulées")
     GPIO_AVAILABLE = False
 
     class MockLED:
-        def __init__(self, pin): 
+        def __init__(self, pin):
             self.pin = pin
             self.is_active = False
-        def on(self):  
+        def on(self):
             self.is_active = True
-            print(f"   🟢 [MOCK] LED pin {self.pin} → ON")
-        def off(self): 
+            print(f"   🟢 [MOCK] LED pin BCM{self.pin} → ON")
+        def off(self):
             self.is_active = False
-            print(f"   ⚫ [MOCK] LED pin {self.pin} → OFF")
+            print(f"   ⚫ [MOCK] LED pin BCM{self.pin} → OFF")
 
     class MockServo:
-        def __init__(self, pin): 
+        def __init__(self, pin):
             self.pin = pin
-            self.value = 0.0  # -1 à +1
-        def __setattr__(self, name, val):
-            object.__setattr__(self, name, val)
-            if name == "value" and hasattr(self, "pin"):
-                print(f"   🔧 [MOCK] Servo pin {self.pin} → value={val:.2f}")
+            self._value = None
+        @property
+        def value(self):
+            return self._value
+        @value.setter
+        def value(self, val):
+            self._value = val
+            if val is None:
+                print(f"   🔧 [MOCK] Servo BCM{self.pin} → DÉTACHÉ (anti-jitter)")
+            else:
+                print(f"   🔧 [MOCK] Servo BCM{self.pin} → value={val:.3f}")
 
     led_green  = MockLED(PIN_LED_GREEN)
     led_orange = MockLED(PIN_LED_ORANGE)
@@ -90,19 +120,73 @@ _leds = {
     "red":    led_red,
 }
 
-# ── État interne ─────────────────────────────────────────────────────────────
+# ── État interne ──────────────────────────────────────────────────────────────
 
-_servo_angle = 0  # 0-180
+_servo_angle   = 0       # 0 = fermé, 90 = ouvert, etc.
+_servo_lock    = threading.Lock()
 _auto_close_timer = None
 
-# ── Audio ────────────────────────────────────────────────────────────────────
+# ── Helpers servo ─────────────────────────────────────────────────────────────
+
+def _angle_to_servo_value(angle: int) -> float:
+    """
+    Convertit un angle (0-180°) en valeur gpiozero (-1.0 à +1.0).
+
+    Convention physique de la barrière :
+      angle 0   → servo.value = +1.0  → position FERMÉE
+      angle 90  → servo.value =  0.0  → position OUVERTE (90°)
+      angle 180 → servo.value = -1.0  → position extrême inverse
+
+    La direction est INVERSÉE par rapport à la formule naïve car
+    le servo est monté de façon à ce que +1 corresponde à "barrière fermée".
+    """
+    # Formule inversée : 0° → +1.0, 180° → -1.0
+    return 1.0 - (angle / 90.0)
+
+def _move_servo(angle: int):
+    """
+    Envoie la commande au servo puis détache le signal après SERVO_DETACH_DELAY
+    pour éliminer le jitter (tremblement en position maintenue).
+    """
+    global _servo_angle
+    angle = max(0, min(180, angle))
+    value = _angle_to_servo_value(angle)
+
+    print(f"🔧 [SERVO] Déplacement → {angle}° (raw_value={value:+.3f})")
+
+    with _servo_lock:
+        try:
+            servo.value = value
+        except Exception as e:
+            print(f"❌ [SERVO] Erreur lors du déplacement : {e}")
+            return
+
+    _servo_angle = angle
+
+    # Détachement différé pour stopper le jitter
+    def _detach():
+        time.sleep(SERVO_DETACH_DELAY)
+        with _servo_lock:
+            try:
+                servo.value = None
+                print(f"🔇 [SERVO] Signal PWM détaché (anti-jitter) — position maintenue à {angle}°")
+            except Exception as e:
+                print(f"⚠️ [SERVO] Erreur détachement : {e}")
+
+    threading.Thread(target=_detach, daemon=True).start()
+
+# ── Initialisation : servo en position FERMÉE au démarrage ───────────────────
+
+print("🔧 [SERVO] Initialisation → position FERMÉE (0°)")
+_move_servo(0)
+
+# ── Audio ─────────────────────────────────────────────────────────────────────
 
 def _generate_beep_wav(freq: int = 880, duration: float = 0.5, volume: float = 0.7) -> str:
-    """Génère un fichier WAV temporaire avec un bip pur."""
+    """Génère un fichier WAV temporaire avec un bip sinusoïdal pur."""
     sample_rate = 44100
     n_samples = int(sample_rate * duration)
     tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-    
     with wave.open(tmp.name, "w") as wf:
         wf.setnchannels(1)
         wf.setsampwidth(2)
@@ -112,41 +196,44 @@ def _generate_beep_wav(freq: int = 880, duration: float = 0.5, volume: float = 0
             sample = int(volume * 32767 * math.sin(2 * math.pi * freq * i / sample_rate))
             data += struct.pack("<h", sample)
         wf.writeframes(data)
-    
     return tmp.name
 
 def _play_audio(freq: int = 880, duration: float = 0.5):
-    """Joue un bip via aplay (ALSA — jack Pi)."""
+    """Joue un bip via aplay (ALSA — sortie jack 3.5mm)."""
     wav_path = None
     try:
         wav_path = _generate_beep_wav(freq, duration)
-        # Force la sortie sur le jack 3.5mm (card 0, device 0)
+        print(f"🔊 [AUDIO] Lecture bip {freq}Hz pendant {duration}s via aplay...")
         result = subprocess.run(
             ["aplay", "-D", "plughw:0,0", wav_path],
             timeout=duration + 2,
-            capture_output=True
+            capture_output=True,
         )
         if result.returncode != 0:
-            # Fallback sans spécifier le device
+            stderr = result.stderr.decode(errors="ignore")
+            print(f"⚠️ [AUDIO] plughw:0,0 échoué ({stderr.strip()}) → fallback aplay par défaut")
             subprocess.run(["aplay", wav_path], timeout=duration + 2, capture_output=True)
-        print(f"🔊 [HW-BRIDGE] Bip joué ({freq}Hz, {duration}s)")
+        else:
+            print(f"✅ [AUDIO] Bip {freq}Hz joué avec succès")
     except FileNotFoundError:
-        print("⚠️ [HW-BRIDGE] aplay introuvable (ALSA non disponible)")
+        print("❌ [AUDIO] aplay introuvable — ALSA non installé ou non accessible dans le conteneur")
+    except subprocess.TimeoutExpired:
+        print(f"⚠️ [AUDIO] Timeout lors de la lecture ({freq}Hz)")
     except Exception as e:
-        print(f"⚠️ [HW-BRIDGE] Erreur audio: {e}")
+        print(f"❌ [AUDIO] Erreur inattendue : {e}")
     finally:
         if wav_path and os.path.exists(wav_path):
             os.unlink(wav_path)
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+# ── Endpoints API ─────────────────────────────────────────────────────────────
 
 @app.get("/status")
 def get_status():
-    """Retourne l'état de tous les composants hardware."""
+    """Retourne l'état actuel de tous les composants hardware."""
     def led_state(led):
-        return led.is_active if hasattr(led, "is_active") else False
-    
-    return {
+        return bool(led.is_active) if hasattr(led, "is_active") else False
+
+    status = {
         "gpio_available": GPIO_AVAILABLE,
         "leds": {
             "green":  led_state(led_green),
@@ -154,23 +241,26 @@ def get_status():
             "red":    led_state(led_red),
         },
         "servo": {
-            "angle": _servo_angle,
-            "value": getattr(servo, "value", 0),
-        }
+            "angle":       _servo_angle,
+            "is_open":     _servo_angle >= 45,
+            "is_closed":   _servo_angle < 45,
+            "pwm_attached": getattr(servo, "value", None) is not None,
+        },
     }
+    return status
 
 @app.post("/led/{color}/{state}")
 def control_led(color: str, state: str):
     """
-    Allume ou éteint une LED.
-    color: green | orange | red
-    state: on | off | toggle
+    Contrôle une LED.
+      color : green | orange | red
+      state : on | off | toggle
     """
     if color not in _leds:
-        raise HTTPException(status_code=400, detail=f"Couleur inconnue: {color}. Valeurs: green, orange, red")
-    
+        raise HTTPException(400, f"Couleur inconnue: '{color}'. Valeurs acceptées: green, orange, red")
+
     led = _leds[color]
-    
+
     if state == "on":
         led.on()
     elif state == "off":
@@ -181,47 +271,45 @@ def control_led(color: str, state: str):
         else:
             led.on()
     else:
-        raise HTTPException(status_code=400, detail=f"État inconnu: {state}. Valeurs: on, off, toggle")
-    
-    is_on = led.is_active if hasattr(led, "is_active") else False
-    print(f"💡 [HW-BRIDGE] LED {color} → {'ON' if is_on else 'OFF'}")
+        raise HTTPException(400, f"État inconnu: '{state}'. Valeurs acceptées: on, off, toggle")
+
+    is_on = bool(led.is_active) if hasattr(led, "is_active") else False
+    print(f"💡 [LED] {color.upper()} → {'ON  ✅' if is_on else 'OFF ⚫'}")
     return {"led": color, "state": "on" if is_on else "off"}
 
 @app.post("/servo/{angle}")
-def control_servo(angle: int, auto_close: bool = False, delay: int = 3):
+def control_servo(angle: int, auto_close: bool = False, delay: int = 5):
     """
-    Positionne le servo à l'angle donné (0-180 degrés).
-    Si auto_close=true, ferme après `delay` secondes.
+    Positionne le servo.
+      angle     : 0 (FERMÉ) à 180°
+      auto_close: si True, referme automatiquement après `delay` secondes
     """
-    global _servo_angle, _auto_close_timer
-    
-    angle = max(0, min(180, angle))
-    # gpiozero Servo : -1 = min (0°), 0 = milieu (90°), +1 = max (180°)
-    servo_value = (angle / 90.0) - 1.0
-    
-    try:
-        servo.value = servo_value
-    except Exception as e:
-        print(f"⚠️ [HW-BRIDGE] Erreur servo: {e}")
-    
-    _servo_angle = angle
-    print(f"🔧 [HW-BRIDGE] Servo → {angle}° (value={servo_value:.2f})")
-    
-    # Auto-fermeture
-    if auto_close and angle > 0:
+    global _auto_close_timer
+
+    _move_servo(angle)
+    label = "FERMÉ" if angle < 45 else "OUVERT" if angle >= 45 else f"{angle}°"
+    print(f"🚧 [SERVO] Position → {angle}° [{label}]")
+
+    if auto_close and angle >= 45:
         if _auto_close_timer:
             _auto_close_timer.cancel()
-        def close():
-            global _servo_angle
-            try:
-                servo.value = -1.0
-                _servo_angle = 0
-                print("🔧 [HW-BRIDGE] Servo → Fermeture automatique")
-            except Exception: pass
-        _auto_close_timer = threading.Timer(delay, close)
+            print(f"⏰ [SERVO] Ancien timer d'auto-fermeture annulé")
+
+        def _auto_close_fn():
+            print(f"⏰ [SERVO] Auto-fermeture déclenchée après {delay}s")
+            _move_servo(0)
+
+        _auto_close_timer = threading.Timer(delay, _auto_close_fn)
         _auto_close_timer.start()
-    
-    return {"angle": angle, "value": round(servo_value, 3), "auto_close": auto_close}
+        print(f"⏰ [SERVO] Auto-fermeture programmée dans {delay}s")
+
+    return {
+        "angle": angle,
+        "raw_value": round(_angle_to_servo_value(angle), 3),
+        "is_open": angle >= 45,
+        "auto_close": auto_close,
+        "auto_close_delay": delay if auto_close else None,
+    }
 
 class AudioRequest(BaseModel):
     freq: int = 880
@@ -230,7 +318,7 @@ class AudioRequest(BaseModel):
 
 @app.post("/audio/test")
 def play_audio(req: AudioRequest):
-    """Joue un son de test sur le jack 3.5mm du Pi."""
+    """Joue un son de test via le jack 3.5mm du Pi."""
     patterns = {
         "single":  [(req.freq, 0.4)],
         "double":  [(req.freq, 0.2), (req.freq, 0.2)],
@@ -238,20 +326,23 @@ def play_audio(req: AudioRequest):
         "success": [(523, 0.15), (659, 0.15), (784, 0.3)],
         "error":   [(300, 0.3), (200, 0.4)],
     }
-    
+
     sequence = patterns.get(req.pattern, patterns["single"])
-    
-    def play_sequence():
-        for freq, dur in sequence:
+    print(f"🔊 [AUDIO] Pattern '{req.pattern}' → {len(sequence)} bip(s)")
+
+    def _play_seq():
+        for i, (freq, dur) in enumerate(sequence):
+            print(f"   🎵 [AUDIO] Bip {i+1}/{len(sequence)} : {freq}Hz × {dur}s")
             _play_audio(freq, dur)
-            time.sleep(0.05)  # Petit gap entre les bips
-    
-    threading.Thread(target=play_sequence, daemon=True).start()
-    return {"status": "playing", "pattern": req.pattern, "sequence_length": len(sequence)}
+            if i < len(sequence) - 1:
+                time.sleep(0.08)
+
+    threading.Thread(target=_play_seq, daemon=True).start()
+    return {"status": "playing", "pattern": req.pattern, "sequence": sequence}
 
 @app.get("/health")
 def health():
-    return {"status": "OK", "gpio": GPIO_AVAILABLE}
+    return {"status": "OK", "gpio": GPIO_AVAILABLE, "servo_angle": _servo_angle}
 
 if __name__ == "__main__":
     import uvicorn
