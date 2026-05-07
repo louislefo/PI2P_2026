@@ -60,6 +60,7 @@ export default function IntercomSystem() {
   const [isMuted, setIsMuted]       = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [micState, setMicState]     = useState('idle'); // idle | requesting | active | denied | http_blocked
+  const [piMicState, setPiMicState] = useState('idle'); // idle | active | error
   const [camError, setCamError]     = useState(false);
 
   const callWsRef    = useRef(null);
@@ -70,6 +71,11 @@ export default function IntercomSystem() {
   const timerRef     = useRef(null);
   const durationRef  = useRef(0);
   const stopRingRef  = useRef(null);
+
+  // Pour le flux audio entrant (Pi → PC)
+  const piMicWsRef = useRef(null);
+  const playAudioCtxRef = useRef(null);
+  const playNextTimeRef = useRef(0);
 
   // ── WS événements d'appel ─────────────────────────────────────────────────
   useEffect(() => {
@@ -173,32 +179,99 @@ export default function IntercomSystem() {
     audioWsRef.current = null;
   }, []);
 
-  // Décrocher → démarre le timer, PAS le micro (bouton séparé)
+  // ── Flux entrant (Pi → PC) ────────────────────────────────────────────────
+  const _startPiMicStream = useCallback(() => {
+    try {
+      const ws = new WebSocket(`${HW_WS_BASE}/ws/mic`);
+      ws.binaryType = 'arraybuffer';
+      piMicWsRef.current = ws;
+
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      playAudioCtxRef.current = audioCtx;
+      playNextTimeRef.current = 0;
+
+      ws.onopen = () => {
+        setPiMicState('active');
+        console.log('[INTERCOM] Écoute du micro Pi démarrée');
+      };
+
+      ws.onmessage = (e) => {
+        if (!playAudioCtxRef.current) return;
+        const data = new Int16Array(e.data);
+        if (data.length === 0) return;
+        
+        // Convertit Int16 S16_LE en Float32
+        const audioBuffer = playAudioCtxRef.current.createBuffer(1, data.length, 16000);
+        const channelData = audioBuffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+          channelData[i] = data[i] / 32768.0;
+        }
+        
+        const source = playAudioCtxRef.current.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(playAudioCtxRef.current.destination);
+        
+        let playTime = playNextTimeRef.current;
+        if (playTime < playAudioCtxRef.current.currentTime) {
+          playTime = playAudioCtxRef.current.currentTime + 0.1; // mini-buffer pour éviter les clics
+        }
+        source.start(playTime);
+        playNextTimeRef.current = playTime + audioBuffer.duration;
+      };
+
+      ws.onerror = (err) => {
+        console.error('[INTERCOM] Erreur du flux audio Pi', err);
+        setPiMicState('error');
+      };
+      
+      ws.onclose = () => setPiMicState('idle');
+
+    } catch(err) {
+      console.error('Erreur ouverture ws/mic:', err);
+      setPiMicState('error');
+    }
+  }, []);
+
+  const _stopPiMicStream = useCallback(() => {
+    piMicWsRef.current?.close();
+    piMicWsRef.current = null;
+    playAudioCtxRef.current?.close();
+    playAudioCtxRef.current = null;
+    setPiMicState('idle');
+  }, []);
+
+  // Décrocher → démarre le timer et le flux audio entrant
   const answer = useCallback(() => {
     stopRingRef.current?.();
     stopRingRef.current = null;
     setCallState('active');
     setMicState('idle');
+    setPiMicState('idle');
     durationRef.current = 0;
     setCallDuration(0);
     timerRef.current = setInterval(() => {
       durationRef.current += 1;
       setCallDuration(durationRef.current);
     }, 1000);
-  }, []);
+    
+    // On démarre l'écoute (le visiteur parle)
+    _startPiMicStream();
+  }, [_startPiMicStream]);
 
   const _hangup = useCallback((notifyWs = true) => {
     stopRingRef.current?.();
     stopRingRef.current = null;
     setCallState('idle');
     setMicState('idle');
+    setPiMicState('idle');
     clearInterval(timerRef.current);
     setCallDuration(0);
     _stopAudioStream();
+    _stopPiMicStream();
     if (notifyWs && callWsRef.current?.readyState === WebSocket.OPEN) {
       callWsRef.current.send(JSON.stringify({ action: 'hangup' }));
     }
-  }, [_stopAudioStream]);
+  }, [_stopAudioStream, _stopPiMicStream]);
 
   const hangup = useCallback(() => _hangup(true), [_hangup]);
 
@@ -480,9 +553,12 @@ export default function IntercomSystem() {
               {/* Label cam — bas */}
               <div style={{
                 position:'absolute', bottom:12, left:14,
-                fontSize:'0.7rem', color:'rgba(255,255,255,0.5)',
+                display:'flex', alignItems:'center', gap:6,
+                fontSize:'0.75rem', color:'rgba(255,255,255,0.7)',
               }}>
-                📷 WCAM100BK — USB
+                📷 WCAM100BK — USB 
+                {piMicState === 'active' && <span style={{ color: '#4ade80', marginLeft: '0.5rem' }}>🔊 Audio entrant</span>}
+                {piMicState === 'error' && <span style={{ color: '#f87171', marginLeft: '0.5rem' }}>🔇 Audio KO</span>}
               </div>
             </div>
 

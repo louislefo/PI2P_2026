@@ -364,6 +364,47 @@ async def ws_audio(ws: WebSocket):
             proc.terminate()
             print("🛑 [AUDIO-WS] aplay arrêté proprement")
 
+# ── WebSocket : Flux audio Pi → PC (Mic webcam) ──────────────────────────────
+
+@app.websocket("/ws/mic")
+async def ws_mic(ws: WebSocket):
+    """
+    Capture l'audio du microphone de la webcam USB (généralement plughw:1,0 sur Pi)
+    et l'envoie en continu vers le navigateur PC.
+    """
+    await ws.accept()
+    print("🎙️ [MIC-WS] Connexion reçue — démarrage arecord (Pi → PC)...")
+    
+    proc = None
+    try:
+        # Essai avec plughw:1,0 (webcam USB très probable) 
+        # ou sysdefault:CARD=1
+        proc = await asyncio.create_subprocess_exec(
+            "arecord", "-D", "plughw:1,0", "-f", "S16_LE", "-r", "16000", "-c", "1", "-",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL
+        )
+        
+        while True:
+            data = await proc.stdout.read(4096)
+            if not data:
+                print("⚠️ [MIC-WS] Fin du flux arecord (erreur device ?)")
+                # Si plughw:1,0 échoue on pourrait faire un fallback, mais on s'arrête ici
+                break
+            await ws.send_bytes(data)
+            
+    except WebSocketDisconnect:
+        print("📴 [MIC-WS] Client déconnecté")
+    except Exception as e:
+        print(f"❌ [MIC-WS] Erreur : {e}")
+    finally:
+        if proc:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+        print("🛑 [MIC-WS] Capture arecord arrêtée")
+
 # ── Endpoints REST ────────────────────────────────────────────────────────────
 
 @app.get("/status")
