@@ -5,6 +5,8 @@ import './App.css';
 import Sidebar from './components/layout/Sidebar';
 import CommandHeader from './components/layout/CommandHeader';
 import AppRouter from './routes/AppRouter';
+import IntercomSystem from './components/IntercomSystem';
+
 
 function App() {
   const [status, setStatus] = useState({ door_open: false, car_present: false });
@@ -138,6 +140,9 @@ function App() {
 
   return (
     <div className="app-shell">
+      {/* Interphone — flottant sur toutes les pages */}
+      <IntercomSystem />
+
       <Sidebar 
         currentView={currentView}
         setCurrentView={setCurrentView}

@@ -41,6 +41,7 @@ services:
       - PIN_LED_ORANGE=17             # Board pin 11
       - PIN_LED_RED=22                # Board pin 15
       - PIN_SERVO=12                  # Board pin 32 / PWM0
+      - PIN_BUTTON=26                 # Board pin 37
     ports:
       - "8083:8083"
     restart: always

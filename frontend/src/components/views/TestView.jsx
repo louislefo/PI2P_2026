@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Lightbulb, Zap, Volume2, Camera, Activity, 
-  RotateCcw, Power, CheckCircle, XCircle, AlertCircle
+  RotateCcw, Power, CheckCircle, XCircle, AlertCircle, Phone
 } from 'lucide-react';
 
 const HW_BASE = 'http://192.168.137.94:8083';
@@ -383,6 +383,33 @@ export default function TestView() {
           }}>
             {hwStatus ? JSON.stringify(hwStatus, null, 2) : hwOnline ? 'Chargement...' : 'Hardware bridge hors ligne\nVérifier : docker logs pi2p_2026-hardware-bridge-1'}
           </pre>
+        </TestCard>
+
+        {/* ── Interphone ── */}
+        <TestCard title="Interphone — Bouton d'appel (BCM26)" icon={Phone} accent="#ec4899">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.6 }}>
+              Simule un appui sur le bouton physique connecté sur <strong style={{color:'#f1f5f9'}}>BCM26 (Board 37)</strong>.
+              La modal d'appel va apparaître sur toutes les pages connectées.
+            </div>
+            <ActionBtn
+              onClick={async () => {
+                const ws = new WebSocket('ws://192.168.137.94:8083/ws/call');
+                await new Promise(r => { ws.onopen = r; setTimeout(r, 2000); });
+                ws.send(JSON.stringify({ action: 'test' }));
+                setTimeout(() => ws.close(), 500);
+              }}
+              disabled={!hwOnline}
+              color="#ec4899"
+              fullWidth
+            >
+              📞 Simuler un appel entrant
+            </ActionBtn>
+            <div style={{ fontSize: '0.7rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <AlertCircle size={12} />
+              La modal d'interphone apparaîtra sur le dashboard principal
+            </div>
+          </div>
         </TestCard>
 
       </div>
