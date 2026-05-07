@@ -44,8 +44,8 @@ try:
     if sys.platform == "win32":
         raise ImportError("Windows détecté → Mock GPIO")
     from gpiozero import LED, Servo
-    from gpiozero.pins.rpigpio import RPiGPIOFactory
-    factory = RPiGPIOFactory()
+    from gpiozero.pins.lgpio import LGPIOFactory
+    factory = LGPIOFactory()
     
     led_green  = LED(PIN_LED_GREEN,  pin_factory=factory)
     led_orange = LED(PIN_LED_ORANGE, pin_factory=factory)
@@ -53,7 +53,7 @@ try:
     # Servo gpiozero : value -1 (0°) à +1 (180°), 0 = 90°
     servo = Servo(PIN_SERVO, pin_factory=factory, min_pulse_width=0.5/1000, max_pulse_width=2.5/1000)
     GPIO_AVAILABLE = True
-    print(f"✅ [HW-BRIDGE] GPIO initialisé — LEDs: {PIN_LED_GREEN}/{PIN_LED_ORANGE}/{PIN_LED_RED}, Servo: {PIN_SERVO}")
+    print(f"✅ [HW-BRIDGE] GPIO initialisé (lgpio) — LEDs: {PIN_LED_GREEN}/{PIN_LED_ORANGE}/{PIN_LED_RED}, Servo: {PIN_SERVO}")
 
 except Exception as e:
     print(f"⚠️ [HW-BRIDGE] {e} → Mock GPIO activé")
