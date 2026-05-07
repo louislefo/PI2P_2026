@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Phone, PhoneOff, Mic, MicOff, Volume2, Camera } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff, Volume2, Camera, Unlock } from 'lucide-react';
 
 const HW_WS_BASE  = 'ws://192.168.137.94:8083';
 const CAM_USB_URL = 'http://192.168.137.94:8082/stream';
@@ -213,6 +213,15 @@ export default function IntercomSystem() {
   if (callState === 'idle') return null;
 
   const isRinging = callState === 'ringing';
+
+  const openBarrier = async () => {
+    try {
+      await fetch('http://192.168.137.94:8083/servo/90?auto_close=true&delay=5', { method: 'POST' });
+      console.log('Barrière ouverte depuis l\'interphone');
+    } catch (err) {
+      console.error('Erreur lors de l\'ouverture de la barrière', err);
+    }
+  };
 
   // ── Panneau micro selon l'état ────────────────────────────────────────────
   const MicPanel = () => {
@@ -514,6 +523,24 @@ export default function IntercomSystem() {
 
               {/* Boutons d'action */}
               <div style={{ display:'flex', flexDirection:'column', gap:'0.6rem' }}>
+                <button
+                  onClick={openBarrier}
+                  style={{
+                    width:'100%', padding:'0.75rem',
+                    borderRadius:12, border:'none',
+                    background:'linear-gradient(135deg,#10b981,#059669)',
+                    color:'#fff', fontWeight:700, fontSize:'0.9rem',
+                    cursor:'pointer', display:'flex', alignItems:'center',
+                    justifyContent:'center', gap:'0.5rem',
+                    boxShadow:'0 4px 18px rgba(16,185,129,0.45)',
+                    transition:'transform 0.15s ease, box-shadow 0.15s ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform='scale(1.02)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform='scale(1)'; }}
+                >
+                  <Unlock size={18}/> Ouvrir barrière
+                </button>
+
                 <button
                   onClick={hangup}
                   style={{

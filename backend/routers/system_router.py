@@ -49,9 +49,12 @@ async def trigger_access(req: AccessRequest):
     
     cfg = load_config()
     if cfg.get("gate_mode", "auto") == "auto":
-        relay.on()
-        await asyncio.sleep(5)
-        relay.off()
+        import requests
+        try:
+            requests.post("http://192.168.137.94:8083/servo/90?auto_close=true&delay=5", timeout=2)
+            print("✅ [SYSTEM] Barrière ouverte via Hardware Bridge (IA)")
+        except Exception as e:
+            print(f"❌ [SYSTEM] Erreur ouverture barrière: {e}")
     return {"status": "success"}
 
 @router.post("/door/open")
@@ -67,9 +70,12 @@ async def open_door():
     await broadcast_history()
     
     if cfg.get("gate_mode", "auto") == "auto":
-        relay.on()
-        await asyncio.sleep(5)
-        relay.off()
+        import requests
+        try:
+            requests.post("http://192.168.137.94:8083/servo/90?auto_close=true&delay=5", timeout=2)
+            print("✅ [SYSTEM] Barrière ouverte via Hardware Bridge (Manuel)")
+        except Exception as e:
+            print(f"❌ [SYSTEM] Erreur ouverture barrière: {e}")
     return {"status": "success", "message": "Door opened manually"}
 
 @router.delete("/api/history/{log_id}")
