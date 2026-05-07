@@ -53,9 +53,9 @@ export default function DashboardView({
         gap: '8px',
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
       }}>
-        {config?.gate_mode === 'always_open' ? '⚠️ MODE OUVERTURE PERMANENTE (Force Ouvert)' : 
-         config?.gate_mode === 'always_closed' ? '🔒 MODE BLOCAGE PERMANENT (Force Fermé)' : 
-         '🤖 MODE AUTOMATIQUE (IA Activée)'}
+        {config?.gate_mode === 'always_open' ? 'MODE OUVERTURE PERMANENTE (Force Ouvert)' : 
+         config?.gate_mode === 'always_closed' ? 'MODE BLOCAGE PERMANENT (Force Fermé)' : 
+         'MODE AUTOMATIQUE (IA Activée)'}
       </div>
 
       {/* ─── Video & Side Controls ─── */}
