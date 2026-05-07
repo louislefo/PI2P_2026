@@ -32,8 +32,9 @@ class VisionProcessor:
         print("🔤 [VISION] Chargement de EasyOCR pour Lecture de texte...")
         try:
             import easyocr
-            self.reader = easyocr.Reader(['en', 'fr'], gpu=False) # gpu=False plus stable sur Windows/Pi sans CUDA
-            print("✅ [VISION] EasyOCR prêt.")
+            # Exploitation du GPU (CUDA/DirectML) pour le traitement rapide
+            self.reader = easyocr.Reader(['en', 'fr'], gpu=True) 
+            print("✅ [VISION] EasyOCR prêt (Mode GPU).")
         except Exception as e:
             print("❌ [VISION] Erreur EasyOCR:", e)
             self.reader = None
@@ -107,6 +108,7 @@ class VisionProcessor:
         # Mode RÉSEAU PULL HTTP (depuis le Pi)
         import requests
         import numpy as np
+        import os
 
         # URL du dernier JPEG (bridge CSI sur le Pi)
         csi_base = os.environ.get("CSI_BRIDGE_URL", "http://192.168.137.94:8081")
@@ -157,10 +159,11 @@ class VisionProcessor:
             if self.model:
                 current_time = time.time()
 
-                # YOLO Throttle: Exécution 2 fois par sec max (0.5s)
-                if current_time - last_yolo_time > 0.5:
-                    # --- Filtrage Véhicules Uniquement ---
-                    target_ids = [2, 3, 5, 7]  # 2=car, 3=motorcycle, 5=bus, 7=truck
+                # YOLO Throttle: Mode Fluide pour GPU (max ~30 FPS au lieu de 2 FPS)
+                if current_time - last_yolo_time > 0.03:
+                    # --- Détection Multiple (Véhicules, Humains, Animaux, Vélos) ---
+                    # 0=person, 1=bicycle, 2=car, 3=motorcycle, 5=bus, 7=truck, 15=cat, 16=dog
+                    target_ids = [0, 1, 2, 3, 5, 7, 15, 16] 
                     results = self.model(frame, classes=target_ids, verbose=False)
 
                     # On garde les boxes pour dessiner fluidement sur les frames sans YOLO intermédiaires
@@ -189,12 +192,22 @@ class VisionProcessor:
                                     break
                         self.last_ocr_time = max(self.last_ocr_time, current_time)
 
-                # Dessiner les dernières box connues pour un rendu vidéo fluide
+                # Dessiner les dernières box connues et leurs labels pour un rendu vidéo ultra qualitatif
                 for box in last_boxes:
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cls_id = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    
+                    # On devine le nom, fallback sur "Objet"
+                    name_map = {0: "Humain", 1: "Velo", 2:"Voiture", 3:"Moto", 5:"Bus", 7:"Camion", 15:"Chat", 16:"Chien"}
+                    label_text = f"{name_map.get(cls_id, 'Objet')} {int(conf*100)}%"
+                    
+                    # Dessin du rectangle avec couleur dynamique par ID
+                    color = (0, 255, 0) if cls_id in [2,3,5,7] else (0, 165, 255) # Vert = Véhicules, Orange = Humains/Animaux
+                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.putText(annotated_frame, label_text, (x1, max(15, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-            ret, buffer = cv2.imencode('.jpg', annotated_frame)
+            ret, buffer = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
             if ret:
                 with self.lock:
                     self.latest_frame = buffer.tobytes()

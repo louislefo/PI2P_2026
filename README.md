@@ -19,22 +19,47 @@ Système de gestion de parking intelligent de nouvelle génération. Alie la pui
 - **Code d'Entrée Physique :** Digicode numérique configurable depuis le dashboard.
 - **IA Modulaire :** Choisissez en temps réel ce que l'IA doit surveiller (Voitures, Motos, Personnes, Animaux).
 
+## 🛠️ Tech Stack
+
+### 🧠 Backend (IA & API)
+- **Framework :** [FastAPI](https://fastapi.tiangolo.com/) (Python 3.11+)
+- **Vision par ordinateur :** [YOLOv8](https://ultralytics.com/) & [EasyOCR](https://github.com/JaidedAI/EasyOCR)
+- **Base de données :** SQLite (Gestion des plaques, utilisateurs et historique)
+- **Matériel :** `gpiozero` pour le contrôle des relais et digicodes.
+
+### 💻 Frontend (Dashboard)
+- **Framework :** [React 19](https://react.dev/) + [Vite](https://vitejs.dev/)
+- **Style :** [Tailwind CSS 4](https://tailwindcss.com/)
+- **Icônes :** Lucide React
+
+### 📹 Infrastructure Caméra (Bridge)
+- **Capture CSI :** `rpicam-vid` (Caméra nappe OV5647)
+- **Capture USB :** OpenCV (Webcam WCAM100BK)
+- **Protocol :** Flux MJPEG over HTTP pour une latence minimale.
+
+---
+
 ## 🗂️ Architecture du Projet
 
 ```text
 ├── backend/
-│   ├── Data/
-│   │   └── pi2p.db           # Base SQLite unique (Historique + Plaques)
-│   ├── core/                 # Hardware (GPIO) et Config
+│   ├── Data/                 # Base SQLite (pi2p.db)
+│   ├── core/                 # Hardware (GPIO, Pin 17) & Config
 │   ├── services/             # VisionProcessor (YOLO + OCR dynamique)
-│   └── routers/              # API Rest et WebSockets pour le live
+│   ├── routers/              # API REST & WebSockets (Live Data)
+│   └── main.py               # Point d'entrée FastAPI
+├── camera-bridge/
+│   ├── bridge.py             # Streamer pour caméra CSI
+│   └── bridge_usb.py         # Streamer pour caméra USB
+├── frontend/
+│   ├── src/
+│   │   ├── components/       # UI Components & Views
+│   │   ├── routes/           # Système de navigation modulaire
+│   │   └── App.jsx           # Gestion d'état & WebSockets
+│   └── nginx.conf            # Config serveur de production
 ├── config/
-│   └── settings.json         # Paramètres matériels et système (Mode, Code)
-└── frontend/
-    ├── src/
-    │   ├── routes/           # Nouveau système de routage modulaire
-    │   ├── components/views/ # Les 4 modules (Dashboard, DB, Logs, Settings)
-    │   └── App.jsx           # Etat central et gestion WebSocket
+│   └── settings.json         # Paramètres hardware & IA
+└── docker-compose.yml        # Orchestration multi-services
 ```
 
 ## 🚀 Installation Express
