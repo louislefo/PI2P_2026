@@ -20,6 +20,7 @@ class SettingsRequest(BaseModel):
     gate_mode: Optional[str] = None
     gate_open_time: Optional[int] = None
     detection_objects: Optional[list[str]] = None
+    vision_camera: Optional[str] = None
 
 @router.get("")
 def get_config_endpoint():
@@ -59,6 +60,11 @@ def update_settings(data: SettingsRequest):
     # Mise à jour des objets à détecter
     if data.detection_objects is not None:
         cfg["detection_objects"] = data.detection_objects
+        from services.vision import processor
+        processor.update_config()
+        
+    if data.vision_camera is not None:
+        cfg["vision_camera"] = data.vision_camera
         from services.vision import processor
         processor.update_config()
         

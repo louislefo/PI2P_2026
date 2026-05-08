@@ -36,14 +36,6 @@ export default function DashboardView({
     }
   };
 
-  const toggleEmergency = async () => {
-    try {
-      await fetch(`http://192.168.137.94:8083/servo/emergency/toggle`, { method: 'POST' });
-    } catch (e) {
-      console.error("Erreur toggleEmergency:", e);
-    }
-  };
-
   return (
     <>
       {/* ─── Status Banner ─── */}
@@ -175,18 +167,6 @@ export default function DashboardView({
           <button className="side-ctrl-btn call" title="Appel" onClick={startCall}>
             <PhoneCall size={28} />
             <span>Appel</span>
-          </button>
-
-          <button 
-            className={`side-ctrl-btn barrier ${status.emergency_stop ? 'open' : ''}`} 
-            title="Arrêt d'Urgence" 
-            onClick={toggleEmergency}
-            style={status.emergency_stop ? { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#ef4444' } : {}}
-          >
-            <AlertCircle size={28} color={status.emergency_stop ? '#ef4444' : 'white'} />
-            <span style={{ color: status.emergency_stop ? '#ef4444' : 'white', fontSize: '0.85rem' }}>
-              {status.emergency_stop ? 'Urgence Activée' : "Arrêt d'Urgence"}
-            </span>
           </button>
         </div>
       </div>

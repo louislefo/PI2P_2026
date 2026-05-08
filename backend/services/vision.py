@@ -111,29 +111,23 @@ class VisionProcessor:
         import numpy as np
         import os
 
-        # URL du dernier JPEG (bridge CSI sur le Pi)
-        csi_base = os.environ.get("CSI_BRIDGE_URL", "http://192.168.137.94:8081")
-        latest_url = csi_base.rstrip("/") + "/latest.jpg"
-        health_url = csi_base.rstrip("/") + "/health"
-        
-        cap = None
-        cleanup = lambda: None
+        print(f"🎥 [VISION] Mode réseau PULL HTTP activé")
 
-        print(f"🎥 [VISION] Mode réseau PULL HTTP CSI : {latest_url}")
-
-        for attempt in range(15):
+        for attempt in range(5):
             try:
-                r = requests.get(health_url, timeout=2)
-                if r.status_code == 200 and b"OK" in r.content:
-                    print("✅ [VISION] Bridge CSI Pi prêt.")
+                # Juste un check rapide
+                r = requests.get("http://192.168.137.94:8081/health", timeout=2)
+                if r.status_code == 200:
                     break
             except Exception:
                 pass
-            print(f"⏳ [VISION] En attente du Pi (CSI) (tentative {attempt+1}/15)...")
-            time.sleep(2)
+            time.sleep(1)
 
         def get_frame():
-            """Récupère le dernier frame disponible sur le Pi (pas de buffer)."""
+            """Récupère le dernier frame disponible sur le Pi."""
+            cam_setting = self.config.get("vision_camera", "CSI")
+            cam_port = "8082" if cam_setting == "USB" else "8081"
+            latest_url = f"http://192.168.137.94:{cam_port}/latest.jpg"
             try:
                 r = requests.get(latest_url, timeout=1.5)
                 if r.status_code == 200 and r.content:
@@ -216,8 +210,6 @@ class VisionProcessor:
 
             if frame_interval > 0:
                 time.sleep(frame_interval)
-
-        cleanup()
             
     def _run_ocr_thread(self, enlarged_img, color_roi, current_time):
         import difflib

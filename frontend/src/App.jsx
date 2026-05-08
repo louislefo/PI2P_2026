@@ -138,6 +138,14 @@ function App() {
     }
   };
 
+  const toggleEmergency = async () => {
+    try {
+      await fetch(`http://192.168.137.94:8083/servo/emergency/toggle`, { method: 'POST' });
+    } catch (e) {
+      console.error("Erreur toggleEmergency:", e);
+    }
+  };
+
   return (
     <div className="app-shell">
       {/* Interphone — flottant sur toutes les pages */}
@@ -148,6 +156,8 @@ function App() {
         setCurrentView={setCurrentView}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
+        status={status}
+        toggleEmergency={toggleEmergency}
       />
       
       <main className="main-content">

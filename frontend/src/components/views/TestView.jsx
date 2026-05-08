@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Lightbulb, Zap, Volume2, Camera, Activity, 
-  RotateCcw, Power, CheckCircle, XCircle, AlertCircle, Phone
+  RotateCcw, Power, CheckCircle, XCircle, AlertCircle, Phone, Mic, MicOff, Headphones
 } from 'lucide-react';
 
 const HW_BASE = 'http://192.168.137.94:8083';
@@ -96,6 +96,17 @@ export default function TestView() {
   const [camUsbError, setCamUsbError] = useState(false);
   const [loading, setLoading] = useState({});
 
+  const [isListeningPi, setIsListeningPi] = useState(false);
+  const [isSpeakingPc, setIsSpeakingPc] = useState(false);
+  
+  const piAudioCtxRef = useRef(null);
+  const piWsRef = useRef(null);
+  const piNextTimeRef = useRef(0);
+
+  const pcAudioCtxRef = useRef(null);
+  const pcWsRef = useRef(null);
+  const pcStreamRef = useRef(null);
+
   // ── Polling status ───────────────────────────────────────────────────────
   useEffect(() => {
     const poll = async () => {
@@ -169,6 +180,88 @@ export default function TestView() {
     setLoad(`audio_${pattern}`, false);
   };
 
+  const toggleListenPi = () => {
+    if (isListeningPi) {
+      piWsRef.current?.close();
+      piAudioCtxRef.current?.close();
+      setIsListeningPi(false);
+    } else {
+      try {
+        const ws = new WebSocket(`${HW_BASE.replace('http', 'ws')}/ws/mic`);
+        ws.binaryType = 'arraybuffer';
+        piWsRef.current = ws;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        piAudioCtxRef.current = audioCtx;
+        piNextTimeRef.current = 0;
+        
+        ws.onopen = () => setIsListeningPi(true);
+        ws.onmessage = (e) => {
+          const data = new Int16Array(e.data);
+          if (data.length === 0 || !piAudioCtxRef.current) return;
+          const buffer = piAudioCtxRef.current.createBuffer(1, data.length, 16000);
+          const channelData = buffer.getChannelData(0);
+          for (let i = 0; i < data.length; i++) channelData[i] = data[i] / 32768.0;
+          const source = piAudioCtxRef.current.createBufferSource();
+          source.buffer = buffer;
+          source.connect(piAudioCtxRef.current.destination);
+          
+          let playTime = piNextTimeRef.current;
+          if (playTime < piAudioCtxRef.current.currentTime) {
+            playTime = piAudioCtxRef.current.currentTime + 0.1;
+          }
+          source.start(playTime);
+          piNextTimeRef.current = playTime + buffer.duration;
+        };
+        ws.onclose = () => setIsListeningPi(false);
+        ws.onerror = () => setIsListeningPi(false);
+      } catch(err) {
+        console.error(err);
+      }
+    }
+  };
+
+  const toggleSpeakPc = async () => {
+    if (isSpeakingPc) {
+      pcStreamRef.current?.getTracks().forEach(t => t.stop());
+      pcAudioCtxRef.current?.close();
+      pcWsRef.current?.close();
+      setIsSpeakingPc(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000 } });
+        pcStreamRef.current = stream;
+        const ws = new WebSocket(`${HW_BASE.replace('http', 'ws')}/ws/audio`);
+        ws.binaryType = 'arraybuffer';
+        pcWsRef.current = ws;
+        
+        ws.onopen = () => {
+          const audioCtx = new AudioContext({ sampleRate: 16000 });
+          pcAudioCtxRef.current = audioCtx;
+          const source = audioCtx.createMediaStreamSource(stream);
+          const proc = audioCtx.createScriptProcessor(4096, 1, 1);
+          proc.onaudioprocess = (e) => {
+            if (ws.readyState !== WebSocket.OPEN) return;
+            const f32 = e.inputBuffer.getChannelData(0);
+            const i16 = new Int16Array(f32.length);
+            for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, Math.round(f32[i] * 32767)));
+            ws.send(i16.buffer);
+          };
+          source.connect(proc);
+          proc.connect(audioCtx.destination);
+          setIsSpeakingPc(true);
+        };
+        ws.onclose = () => setIsSpeakingPc(false);
+        ws.onerror = () => {
+          setIsSpeakingPc(false);
+          alert("Erreur WS Audio (Micro PC)");
+        };
+      } catch (err) {
+        console.error(err);
+        alert("Accès au microphone refusé ou impossible");
+      }
+    }
+  };
+
   // ── LED Config ───────────────────────────────────────────────────────────
   const LED_CONFIG = [
     { key: 'green',  label: 'Verte',  pin: 'BCM27', color: '#22c55e', glow: '#22c55e' },
@@ -184,7 +277,7 @@ export default function TestView() {
   ];
 
   return (
-    <div style={{ padding: '1rem', maxWidth: 1200, margin: '0 auto', background: '#0f172a', minHeight: '100vh', borderRadius: '16px', color: '#f1f5f9' }}>
+    <div style={{ padding: '1.5rem', margin: '0 auto', background: '#0f172a', minHeight: 'calc(100vh - 4rem)', borderRadius: '16px', color: '#f1f5f9', flex: 1, overflow: 'auto' }}>
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -386,29 +479,59 @@ export default function TestView() {
         </TestCard>
 
         {/* ── Interphone ── */}
-        <TestCard title="Interphone — Bouton d'appel (BCM26)" icon={Phone} accent="#ec4899">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <div style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.6 }}>
-              Simule un appui sur le bouton physique connecté sur <strong style={{color:'#f1f5f9'}}>BCM26 (Board 37)</strong>.
-              La modal d'appel va apparaître sur toutes les pages connectées.
+        <TestCard title="Interphone & Microphones" icon={Phone} accent="#ec4899">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            
+            <div style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+              <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Headphones size={14} color="#06b6d4" />
+                Écouter la Barrière (Micro Pi)
+              </h3>
+              <ActionBtn
+                onClick={toggleListenPi}
+                disabled={!hwOnline}
+                color={isListeningPi ? "#ef4444" : "#06b6d4"}
+                fullWidth
+              >
+                {isListeningPi ? <><Volume2 size={16}/> Arrêter l'écoute</> : <><Headphones size={16}/> Écouter le micro USB (Pi)</>}
+              </ActionBtn>
             </div>
-            <ActionBtn
-              onClick={async () => {
-                const ws = new WebSocket('ws://192.168.137.94:8083/ws/call');
-                await new Promise(r => { ws.onopen = r; setTimeout(r, 2000); });
-                ws.send(JSON.stringify({ action: 'test' }));
-                setTimeout(() => ws.close(), 500);
-              }}
-              disabled={!hwOnline}
-              color="#ec4899"
-              fullWidth
-            >
-              📞 Simuler un appel entrant
-            </ActionBtn>
-            <div style={{ fontSize: '0.7rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <AlertCircle size={12} />
-              La modal d'interphone apparaîtra sur le dashboard principal
+
+            <div style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+              <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Mic size={14} color="#10b981" />
+                Parler à la Barrière (Micro PC)
+              </h3>
+              <ActionBtn
+                onClick={toggleSpeakPc}
+                disabled={!hwOnline}
+                color={isSpeakingPc ? "#ef4444" : "#10b981"}
+                fullWidth
+              >
+                {isSpeakingPc ? <><MicOff size={16}/> Arrêter de parler</> : <><Mic size={16}/> Parler dans le haut-parleur (Pi)</>}
+              </ActionBtn>
             </div>
+
+            <div style={{ borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.6, marginBottom: '0.5rem' }}>
+                Test du <strong>bouton d'appel physique</strong> (BCM26). Cela affichera l'appel sur le Dashboard.
+              </div>
+              <ActionBtn
+                onClick={async () => {
+                  const ws = new WebSocket('ws://192.168.137.94:8083/ws/call');
+                  await new Promise(r => { ws.onopen = r; setTimeout(r, 2000); });
+                  ws.send(JSON.stringify({ action: 'test' }));
+                  setTimeout(() => ws.close(), 500);
+                }}
+                disabled={!hwOnline}
+                color="#ec4899"
+                fullWidth
+                size="sm"
+              >
+                📞 Simuler le bouton de la barrière
+              </ActionBtn>
+            </div>
+
           </div>
         </TestCard>
 
