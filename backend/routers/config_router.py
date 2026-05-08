@@ -21,6 +21,7 @@ class SettingsRequest(BaseModel):
     gate_open_time: Optional[int] = None
     detection_objects: Optional[list[str]] = None
     vision_camera: Optional[str] = None
+    ai_fps: Optional[int] = None
 
 @router.get("")
 def get_config_endpoint():
@@ -65,6 +66,11 @@ def update_settings(data: SettingsRequest):
         
     if data.vision_camera is not None:
         cfg["vision_camera"] = data.vision_camera
+        from services.vision import processor
+        processor.update_config()
+        
+    if data.ai_fps is not None:
+        cfg["ai_fps"] = data.ai_fps
         from services.vision import processor
         processor.update_config()
         

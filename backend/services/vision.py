@@ -137,14 +137,16 @@ class VisionProcessor:
                 pass
             return None
 
-        # PC/Windows : on limite à 30fps environ la récupération pour ne pas spammer le Pi
-        frame_interval = 1 / 30.0
-
         # ── Boucle principale ───────────────────────────────────────────────────
-        last_yolo_time = 0
-        last_boxes = []
-
         while self.running:
+            # Limitation du FPS de l'IA (et du flux vidéo associé)
+            ai_fps = self.config.get("ai_fps", 3)
+            try: ai_fps = int(ai_fps)
+            except: ai_fps = 3
+            if ai_fps < 1: ai_fps = 1
+            if ai_fps > 30: ai_fps = 30
+            frame_interval = 1.0 / ai_fps
+
             frame = get_frame()
             if frame is None:
                 time.sleep(0.1)
@@ -154,39 +156,36 @@ class VisionProcessor:
             if self.model:
                 current_time = time.time()
 
-                # YOLO Throttle: Mode Fluide pour GPU (max ~30 FPS au lieu de 2 FPS)
-                if current_time - last_yolo_time > 0.03:
-                    # --- Détection Multiple (Véhicules, Humains, Animaux, Vélos) ---
-                    # 0=person, 1=bicycle, 2=car, 3=motorcycle, 5=bus, 7=truck, 15=cat, 16=dog
-                    target_ids = [0, 1, 2, 3, 5, 7, 15, 16] 
-                    results = self.model(frame, classes=target_ids, verbose=False)
+                # --- Détection Multiple (Véhicules, Humains, Animaux, Vélos) ---
+                # 0=person, 1=bicycle, 2=car, 3=motorcycle, 5=bus, 7=truck, 15=cat, 16=dog
+                target_ids = [0, 1, 2, 3, 5, 7, 15, 16] 
+                results = self.model(frame, classes=target_ids, verbose=False)
 
-                    # On garde les boxes pour dessiner fluidement sur les frames sans YOLO intermédiaires
-                    last_boxes = results[0].boxes
-                    last_yolo_time = current_time
+                # On garde les boxes pour dessiner
+                last_boxes = results[0].boxes
 
-                    # --- LANCEMENT OCR INTELLIGENT ---
-                    cfg = load_config()
-                    if self.reader and (current_time - self.last_ocr_time > 2.0) and cfg.get("gate_mode", "auto") == "auto":
-                        for box in last_boxes:
-                            cls_id = int(box.cls[0])
-                            if cls_id in [2, 3, 5, 7]:
-                                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                                car_roi = frame[y1:y2, x1:x2]
+                # --- LANCEMENT OCR INTELLIGENT ---
+                cfg = load_config()
+                if self.reader and (current_time - self.last_ocr_time > 2.0) and cfg.get("gate_mode", "auto") == "auto":
+                    for box in last_boxes:
+                        cls_id = int(box.cls[0])
+                        if cls_id in [2, 3, 5, 7]:
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])
+                            car_roi = frame[y1:y2, x1:x2]
 
-                                if car_roi.shape[0] > 10 and car_roi.shape[1] > 10:
-                                    self.tested_cars_count += 1
-                                    obj_name = "Voiture" if cls_id == 2 else "Moto/Camion"
-                                    print(f"🚙 [INFO] {obj_name} détectée ! Tentative de lecture de plaque (Analyse #{self.tested_cars_count})...")
-                                    import os
-                                    os.makedirs("data/debug_ocr", exist_ok=True)
-                                    gray = cv2.cvtColor(car_roi, cv2.COLOR_BGR2GRAY)
-                                    enlarged = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-                                    cv2.imwrite(f"data/debug_ocr/roi_{int(current_time)}.jpg", enlarged)
-                                    self.last_ocr_time = current_time
-                                    threading.Thread(target=self._run_ocr_thread, args=(enlarged, car_roi.copy(), current_time), daemon=True).start()
-                                    break
-                        self.last_ocr_time = max(self.last_ocr_time, current_time)
+                            if car_roi.shape[0] > 10 and car_roi.shape[1] > 10:
+                                self.tested_cars_count += 1
+                                obj_name = "Voiture" if cls_id == 2 else "Moto/Camion"
+                                print(f"🚙 [INFO] {obj_name} détectée ! Tentative de lecture de plaque (Analyse #{self.tested_cars_count})...")
+                                import os
+                                os.makedirs("data/debug_ocr", exist_ok=True)
+                                gray = cv2.cvtColor(car_roi, cv2.COLOR_BGR2GRAY)
+                                enlarged = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+                                cv2.imwrite(f"data/debug_ocr/roi_{int(current_time)}.jpg", enlarged)
+                                self.last_ocr_time = current_time
+                                threading.Thread(target=self._run_ocr_thread, args=(enlarged, car_roi.copy(), current_time), daemon=True).start()
+                                break
+                    self.last_ocr_time = max(self.last_ocr_time, current_time)
 
                 # Dessiner les dernières box connues et leurs labels pour un rendu vidéo ultra qualitatif
                 for box in last_boxes:

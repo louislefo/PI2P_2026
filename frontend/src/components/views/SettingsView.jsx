@@ -8,6 +8,7 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
   const initialGateOpenTime = config.gate_open_time || 5;
   const initialDetection = config.detection_objects || ['car'];
   const initialVisionCamera = config.vision_camera || 'CSI';
+  const initialAiFps = config.ai_fps || 3;
 
   // États locaux du formulaire
   const [localCode, setLocalCode] = useState(initialCode);
@@ -15,6 +16,7 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
   const [localGateOpenTime, setLocalGateOpenTime] = useState(initialGateOpenTime);
   const [localDetection, setLocalDetection] = useState(initialDetection);
   const [localVisionCamera, setLocalVisionCamera] = useState(initialVisionCamera);
+  const [localAiFps, setLocalAiFps] = useState(initialAiFps);
   
   const [showCode, setShowCode] = useState(false);
   const [savedStatus, setSavedStatus] = useState('');
@@ -26,6 +28,7 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
     setLocalGateOpenTime(config.gate_open_time || 5);
     setLocalDetection(config.detection_objects || ['car']);
     setLocalVisionCamera(config.vision_camera || 'CSI');
+    setLocalAiFps(config.ai_fps || 3);
   }, [config]);
 
   const handleSubmit = async (e) => {
@@ -38,7 +41,8 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
         gate_mode: localMode,
         gate_open_time: parseInt(localGateOpenTime, 10),
         detection_objects: localDetection,
-        vision_camera: localVisionCamera
+        vision_camera: localVisionCamera,
+        ai_fps: parseInt(localAiFps, 10)
       };
 
       const resp = await fetch(`${API_BASE}/api/config/settings`, {
@@ -159,7 +163,7 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
                 style={{ 
                   width: '120px', textAlign: 'center', fontSize: '1.2rem', padding: '0.5rem', 
                   borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', 
-                  background: 'rgba(255,255,255,0.1)', color: '#f8fafc', fontWeight: 'bold' 
+                  background: '#f8fafc', color: '#0f172a', fontWeight: 'bold' 
                 }}
               />
             </div>
@@ -205,6 +209,25 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
                 </div>
                 <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Webcam WCAM100BK</div>
               </label>
+            </div>
+
+            <div className="form-group" style={{ marginTop: '2rem' }}>
+              <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ color: '#e2e8f0', fontWeight: '600' }}>Fréquence d'Analyse IA (FPS)</span>
+                <span style={{ color: '#06b6d4', fontWeight: 'bold' }}>{localAiFps} img/s</span>
+              </label>
+              <input 
+                type="range" 
+                min="1"
+                max="15"
+                step="1"
+                value={localAiFps} 
+                onChange={(e) => setLocalAiFps(e.target.value)} 
+                style={{ width: '100%' }}
+              />
+              <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                Limite le nombre d'images analysées par l'IA chaque seconde. Un faible framerate (ex: 3 FPS) permet d'avoir une excellente qualité sans saturer le processeur. Le flux vidéo brut reste fluide à 30 FPS.
+              </p>
             </div>
           </section>
 
