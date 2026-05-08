@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings2, KeyRound, Lock, Unlock, Zap, Save, Shield, Eye, EyeOff, Camera, Check } from 'lucide-react';
+import { Settings2, KeyRound, Lock, Unlock, Zap, Save, Shield, Eye, EyeOff } from 'lucide-react';
 
 export default function SettingsView({ config, setConfig, API_BASE }) {
   // Extraction des valeurs de la config avec fallbacks
@@ -7,15 +7,12 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
   const initialMode = config.gate_mode || 'auto';
   const initialGateOpenTime = config.gate_open_time || 5;
   const initialDetection = config.detection_objects || ['car'];
-  const initialAiFps = config.ai_fps || 4;
 
   // États locaux du formulaire
   const [localCode, setLocalCode] = useState(initialCode);
   const [localMode, setLocalMode] = useState(initialMode);
   const [localGateOpenTime, setLocalGateOpenTime] = useState(initialGateOpenTime);
   const [localDetection, setLocalDetection] = useState(initialDetection);
-  const [localAiFps, setLocalAiFps] = useState(initialAiFps);
-  
   const [showCode, setShowCode] = useState(false);
   const [savedStatus, setSavedStatus] = useState('');
 
@@ -25,7 +22,6 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
     setLocalMode(config.gate_mode || 'auto');
     setLocalGateOpenTime(config.gate_open_time || 5);
     setLocalDetection(config.detection_objects || ['car']);
-    setLocalAiFps(config.ai_fps || 4);
   }, [config]);
 
   const handleSubmit = async (e) => {
@@ -37,8 +33,7 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
         entry_code: localCode,
         gate_mode: localMode,
         gate_open_time: parseInt(localGateOpenTime, 10),
-        detection_objects: localDetection,
-        ai_fps: parseInt(localAiFps, 10)
+        detection_objects: localDetection
       };
 
       const resp = await fetch(`${API_BASE}/api/config/settings`, {
@@ -156,44 +151,9 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
                 max="60"
                 value={localGateOpenTime} 
                 onChange={(e) => setLocalGateOpenTime(e.target.value)} 
-                style={{ 
-                  width: '120px', textAlign: 'center', fontSize: '1.2rem', padding: '0.5rem', 
-                  borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', 
-                  background: '#f8fafc', color: '#0f172a', fontWeight: 'bold' 
-                }}
+                className="pin-input"
+                style={{ width: '100px', textAlign: 'center' }}
               />
-            </div>
-          </section>
-
-          {/* Section Paramètres IA */}
-          <section className="settings-section" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.5rem' }}>
-            <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-              <div style={{ padding: '8px', background: 'rgba(6, 182, 212, 0.2)', borderRadius: '10px' }}>
-                <Camera size={20} color="#06b6d4" />
-              </div>
-              <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#f8fafc' }}>Paramètres IA (Caméra CSI)</h2>
-            </div>
-            <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              L'analyse IA est fixée sur la caméra CSI (Nappe) pour des performances optimales.
-            </p>
-
-            <div className="form-group" style={{ marginTop: '2rem' }}>
-              <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <span style={{ color: '#e2e8f0', fontWeight: '600' }}>Fréquence d'Analyse IA (FPS)</span>
-                <span style={{ color: '#06b6d4', fontWeight: 'bold' }}>{localAiFps} img/s</span>
-              </label>
-              <input 
-                type="range" 
-                min="1"
-                max="15"
-                step="1"
-                value={localAiFps} 
-                onChange={(e) => setLocalAiFps(e.target.value)} 
-                style={{ width: '100%' }}
-              />
-              <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '0.5rem' }}>
-                Limite le nombre d'images analysées par l'IA chaque seconde. Un faible framerate (ex: 3 FPS) permet d'avoir une excellente qualité sans saturer le processeur. Le flux vidéo brut reste fluide à 30 FPS.
-              </p>
             </div>
           </section>
 
@@ -227,21 +187,9 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
             </div>
           </section>
 
-          <div style={{
-            paddingTop: '1.5rem', paddingBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: '2rem'
-          }}>
-            <span style={{
-              color: savedStatus.includes('Erreur') ? '#ef4444' : '#22c55e', 
-              fontSize: '0.9rem', fontWeight: 500, opacity: savedStatus ? 1 : 0, transition: 'opacity 0.3s'
-            }}>
-              {savedStatus || 'Prêt'}
-            </span>
-            <button type="submit" style={{
-              display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#6366f1', color: 'white',
-              border: 'none', padding: '0.75rem 1.5rem', borderRadius: '8px', fontSize: '1rem', fontWeight: 600,
-              cursor: 'pointer', boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)', transition: 'background 0.2s'
-            }} onMouseEnter={e => e.currentTarget.style.background = '#4f46e5'} onMouseLeave={e => e.currentTarget.style.background = '#6366f1'}>
+          <div className="settings-footer">
+            <span className={`save-status ${savedStatus.includes('Erreur') ? 'error' : ''}`}>{savedStatus}</span>
+            <button type="submit" className="save-btn">
               <Save size={18} />
               Enregistrer les modifications
             </button>

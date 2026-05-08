@@ -6,9 +6,9 @@ export default function DashboardView({
   status, history, plates, openDoor, API_BASE, config, setCurrentView 
 }) {
   const [videoError, setVideoError] = useState(false);
-  const [activeCam, setActiveCam] = useState('CSI');
+  const [activeCam, setActiveCam] = useState('CAM_01_IN');
   const [streamKey, setStreamKey] = useState(Date.now());
-  const inactiveCam = activeCam === 'CSI' ? 'USB' : 'CSI';
+  const inactiveCam = activeCam === 'CAM_01_IN' ? 'CAM_02_OUT' : 'CAM_01_IN';
   const videoRef = useRef(null);
 
   const authorizedCount = history.filter(h => isAuthorized(h.status)).length;
@@ -24,21 +24,8 @@ export default function DashboardView({
     }
   };
 
-  const refreshStream = () => setStreamKey(Date.now());
-
-  // CSI = flux IA via backend (/video_feed)
-  // USB = flux brut proxifié via backend (/video_feed_raw)
-  const getStreamUrl = (camType) => {
-    if (camType === 'CSI') {
-      return `${API_BASE}/video_feed?t=${streamKey}`;
-    } else {
-      return `${API_BASE}/video_feed_raw?t=${streamKey}`;
-    }
-  };
-
-  const getCamLabel = (camType) => {
-    if (camType === 'CSI') return 'CSI (Nappe - IA)';
-    return 'USB (Webcam - Brut)';
+  const refreshStream = () => {
+    setStreamKey(Date.now());
   };
 
   const startCall = () => {
@@ -87,18 +74,10 @@ export default function DashboardView({
         {/* Video Section */}
         <div className="video-section">
           <div className="video-frame" ref={videoRef}>
-            {videoError ? (
-              <div className="video-error-state">
-                <AlertCircle size={48} color="#ef4444" />
-                <p>Connexion à la caméra {activeCam} perdue</p>
-                <button onClick={() => { setVideoError(false); refreshStream(); }}>
-                  Réessayer
-                </button>
-              </div>
-            ) : (
+            {!videoError && (
               <img
-                src={getStreamUrl(activeCam)}
-                alt={`Flux Caméra ${activeCam}`}
+                src={`${API_BASE}/video_feed?cam=${activeCam}&t=${streamKey}`}
+                alt={`Flux ${activeCam} + OCR`}
                 onError={() => setVideoError(true)}
               />
             )}
@@ -108,7 +87,7 @@ export default function DashboardView({
               <div 
                 className="pip-camera" 
                 onClick={() => setActiveCam(inactiveCam)}
-                title={`Passer sur la caméra ${inactiveCam}`}
+                title="Basculer vers cette caméra"
                 style={{
                   position: 'absolute',
                   bottom: '16px',
@@ -128,9 +107,9 @@ export default function DashboardView({
                 onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'}
               >
                 <img 
-                  src={getStreamUrl(inactiveCam)} 
+                  src={`${API_BASE}/video_feed?cam=${inactiveCam}&t=${streamKey}`} 
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                  alt={`Caméra ${inactiveCam}`}
+                  alt="Caméra secondaire"
                 />
               </div>
             )}
@@ -139,7 +118,7 @@ export default function DashboardView({
             {!videoError && (
               <div className="video-overlay-badge">
                 <span className="live-dot"></span>
-                <span>En Direct // {getCamLabel(activeCam)}</span>
+                <span>En Direct // {activeCam}</span>
               </div>
             )}
 

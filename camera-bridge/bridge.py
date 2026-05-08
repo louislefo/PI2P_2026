@@ -31,9 +31,9 @@ def capture_loop():
     CMD = [
         "rpicam-vid",
         "-t", "0",               # Durée infinie
-        "--width", "1920",
-        "--height", "1080",
-        "--framerate", "15",
+        "--width", "640",
+        "--height", "480",
+        "--framerate", "5",
         "--codec", "mjpeg",
         "--nopreview",
         "-o", "-",               # Sortie sur stdout

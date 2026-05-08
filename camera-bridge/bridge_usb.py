@@ -25,9 +25,8 @@ def capture_loop():
             if cap.isOpened():
                 # Optimisations pour la webcam
                 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-                cap.set(cv2.CAP_PROP_FPS, 30)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
                 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 
                 # Test de lecture pour s'assurer que ça marche vraiment
@@ -54,7 +53,7 @@ def capture_loop():
             time.sleep(2)
             continue
             
-        ret2, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        ret2, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
         if ret2:
             frame_data = buffer.tobytes()
             with frame_lock:
@@ -62,7 +61,8 @@ def capture_loop():
             frame_event.set()
             frame_event.clear()
             
-        time.sleep(1/30.0)
+        # Limite à 15 FPS pour économiser le CPU du Pi
+        time.sleep(1/15.0)
 
 # ──────────────────────────────────────────────────────────────────────
 # Serveur HTTP MJPEG

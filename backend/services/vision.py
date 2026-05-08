@@ -41,7 +41,6 @@ class VisionProcessor:
             self.reader = None
             
         self.last_ocr_time = 0
-        self.ocr_active = False
         
         # Mappage des IDs COCO pour les objets funs
         self.coco_mapping = {
@@ -112,21 +111,29 @@ class VisionProcessor:
         import numpy as np
         import os
 
-        print(f"🎥 [VISION] Mode réseau PULL HTTP activé")
+        # URL du dernier JPEG (bridge CSI sur le Pi)
+        csi_base = os.environ.get("CSI_BRIDGE_URL", "http://192.168.137.94:8081")
+        latest_url = csi_base.rstrip("/") + "/latest.jpg"
+        health_url = csi_base.rstrip("/") + "/health"
+        
+        cap = None
+        cleanup = lambda: None
 
-        for attempt in range(5):
+        print(f"🎥 [VISION] Mode réseau PULL HTTP CSI : {latest_url}")
+
+        for attempt in range(15):
             try:
-                # Juste un check rapide
-                r = requests.get("http://192.168.137.94:8081/health", timeout=2)
-                if r.status_code == 200:
+                r = requests.get(health_url, timeout=2)
+                if r.status_code == 200 and b"OK" in r.content:
+                    print("✅ [VISION] Bridge CSI Pi prêt.")
                     break
             except Exception:
                 pass
-            time.sleep(1)
+            print(f"⏳ [VISION] En attente du Pi (CSI) (tentative {attempt+1}/15)...")
+            time.sleep(2)
 
         def get_frame():
-            """Récupère le dernier frame disponible sur le Pi (Toujours CSI = 8081)."""
-            latest_url = "http://192.168.137.94:8081/latest.jpg"
+            """Récupère le dernier frame disponible sur le Pi (pas de buffer)."""
             try:
                 r = requests.get(latest_url, timeout=1.5)
                 if r.status_code == 200 and r.content:
@@ -136,59 +143,56 @@ class VisionProcessor:
                 pass
             return None
 
+        # PC/Windows : on limite à 30fps environ la récupération pour ne pas spammer le Pi
+        frame_interval = 1 / 30.0
+
         # ── Boucle principale ───────────────────────────────────────────────────
         last_yolo_time = 0
         last_boxes = []
 
         while self.running:
-            # L'IA est limitée, mais le flux brut de téléchargement depuis la Pi va aussi vite que possible (limité par time.sleep(1/30.0))
-            ai_fps = self.config.get("ai_fps", 4)
-            try: ai_fps = int(ai_fps)
-            except: ai_fps = 4
-            if ai_fps < 1: ai_fps = 1
-            if ai_fps > 30: ai_fps = 30
-            yolo_interval = 1.0 / ai_fps
-
             frame = get_frame()
             if frame is None:
-                time.sleep(0.05)
+                time.sleep(0.1)
                 continue
 
             annotated_frame = frame.copy()
             if self.model:
                 current_time = time.time()
 
-                if current_time - last_yolo_time >= yolo_interval:
-                    # YOLO en résolution 1280 pour une meilleure lecture de plaque
+                # YOLO Throttle: Mode Fluide pour GPU (max ~30 FPS au lieu de 2 FPS)
+                if current_time - last_yolo_time > 0.03:
+                    # --- Détection Multiple (Véhicules, Humains, Animaux, Vélos) ---
+                    # 0=person, 1=bicycle, 2=car, 3=motorcycle, 5=bus, 7=truck, 15=cat, 16=dog
                     target_ids = [0, 1, 2, 3, 5, 7, 15, 16] 
-                    results = self.model(frame, imgsz=1280, classes=target_ids, verbose=False)
-    
-                    # On garde les boxes pour dessiner
+                    results = self.model(frame, classes=target_ids, verbose=False)
+
+                    # On garde les boxes pour dessiner fluidement sur les frames sans YOLO intermédiaires
                     last_boxes = results[0].boxes
                     last_yolo_time = current_time
 
-                # --- LANCEMENT OCR INTELLIGENT ---
-                cfg = load_config()
-                if self.reader and not self.ocr_active and (current_time - self.last_ocr_time > 2.0) and cfg.get("gate_mode", "auto") == "auto":
-                    for box in last_boxes:
-                        cls_id = int(box.cls[0])
-                        if cls_id in [2, 3, 5, 7]:
-                            x1, y1, x2, y2 = map(int, box.xyxy[0])
-                            car_roi = frame[y1:y2, x1:x2]
+                    # --- LANCEMENT OCR INTELLIGENT ---
+                    cfg = load_config()
+                    if self.reader and (current_time - self.last_ocr_time > 2.0) and cfg.get("gate_mode", "auto") == "auto":
+                        for box in last_boxes:
+                            cls_id = int(box.cls[0])
+                            if cls_id in [2, 3, 5, 7]:
+                                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                                car_roi = frame[y1:y2, x1:x2]
 
-                            if car_roi.shape[0] > 10 and car_roi.shape[1] > 10:
-                                self.ocr_active = True
-                                self.tested_cars_count += 1
-                                obj_name = "Voiture" if cls_id == 2 else "Moto/Camion"
-                                print(f"🚙 [INFO] {obj_name} détectée ! Tentative de lecture de plaque (Analyse #{self.tested_cars_count})...")
-                                import os
-                                os.makedirs("data/debug_ocr", exist_ok=True)
-                                gray = cv2.cvtColor(car_roi, cv2.COLOR_BGR2GRAY)
-                                enlarged = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-                                cv2.imwrite(f"data/debug_ocr/roi_{int(current_time)}.jpg", enlarged)
-                                self.last_ocr_time = current_time
-                                threading.Thread(target=self._run_ocr_thread, args=(enlarged, car_roi.copy(), current_time), daemon=True).start()
-                                break
+                                if car_roi.shape[0] > 10 and car_roi.shape[1] > 10:
+                                    self.tested_cars_count += 1
+                                    obj_name = "Voiture" if cls_id == 2 else "Moto/Camion"
+                                    print(f"🚙 [INFO] {obj_name} détectée ! Tentative de lecture de plaque (Analyse #{self.tested_cars_count})...")
+                                    import os
+                                    os.makedirs("data/debug_ocr", exist_ok=True)
+                                    gray = cv2.cvtColor(car_roi, cv2.COLOR_BGR2GRAY)
+                                    enlarged = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+                                    cv2.imwrite(f"data/debug_ocr/roi_{int(current_time)}.jpg", enlarged)
+                                    self.last_ocr_time = current_time
+                                    threading.Thread(target=self._run_ocr_thread, args=(enlarged, car_roi.copy(), current_time), daemon=True).start()
+                                    break
+                        self.last_ocr_time = max(self.last_ocr_time, current_time)
 
                 # Dessiner les dernières box connues et leurs labels pour un rendu vidéo ultra qualitatif
                 for box in last_boxes:
@@ -210,8 +214,10 @@ class VisionProcessor:
                 with self.lock:
                     self.latest_frame = buffer.tobytes()
 
-            # Boucle réseau à ~30 FPS pour un flux très fluide
-            time.sleep(1/30.0)
+            if frame_interval > 0:
+                time.sleep(frame_interval)
+
+        cleanup()
             
     def _run_ocr_thread(self, enlarged_img, color_roi, current_time):
         import difflib
@@ -273,8 +279,6 @@ class VisionProcessor:
                 else:
                     print(f"❌ [ACCÈS REFUSÉ] Trop éloigné d'une plaque connue.")
         
-        self.ocr_active = False
-
     def get_frame(self):
         with self.lock:
             return self.latest_frame
