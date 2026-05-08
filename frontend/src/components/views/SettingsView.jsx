@@ -156,8 +156,11 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
                 max="60"
                 value={localGateOpenTime} 
                 onChange={(e) => setLocalGateOpenTime(e.target.value)} 
-                className="pin-input"
-                style={{ width: '100px', textAlign: 'center' }}
+                style={{ 
+                  width: '120px', textAlign: 'center', fontSize: '1.2rem', padding: '0.5rem', 
+                  borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', 
+                  background: 'rgba(255,255,255,0.1)', color: '#f8fafc', fontWeight: 'bold' 
+                }}
               />
             </div>
           </section>
@@ -236,8 +239,7 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
           </section>
 
           <div style={{
-            position: 'sticky', bottom: 0, background: 'linear-gradient(to top, #0f172a 60%, transparent)',
-            paddingTop: '2rem', paddingBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            paddingTop: '1.5rem', paddingBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: '2rem'
           }}>
             <span style={{

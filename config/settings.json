@@ -11,5 +11,6 @@
         "bicycle",
         "person"
     ],
-    "gate_open_time": 9
+    "gate_open_time": 10,
+    "vision_camera": "USB"
 }

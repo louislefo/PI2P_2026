@@ -4,45 +4,47 @@ import cv2
 import time
 import threading
 from services.vision import processor
+from core.config import load_config
 
 router = APIRouter(tags=["Video"])
 
-# ──── Cache pour la caméra secondaire (pas d'IA dessus) ────
-_secondary_cam_lock = threading.Lock()
-_secondary_frame = None
-_secondary_thread = None
-_secondary_running = False
+# ──── Cache pour la caméra brute (pas d'IA dessus) ────
+_raw_cam_lock = threading.Lock()
+_raw_frame = None
+_raw_running = False
+_raw_thread = None
 
-def _run_secondary_cam():
-    """Thread dédié pour capturer la caméra secondaire depuis le réseau (Pi)."""
-    global _secondary_frame, _secondary_running
+def _run_raw_cam():
+    """Thread dédié pour capturer la caméra non analysée depuis le Pi."""
+    global _raw_frame, _raw_running
     import requests
-
-    usb_url = "http://192.168.137.94:8082/latest.jpg"
-    print(f"🎥 [STREAM] Lancement lecture réseau Caméra USB ({usb_url})")
     
-    while _secondary_running:
+    while _raw_running:
+        cfg = load_config()
+        ai_cam = cfg.get("vision_camera", "CSI")
+        # Si l'IA est sur CSI (8081), on veut lire USB (8082) en brut, et inversement
+        raw_port = "8082" if ai_cam == "CSI" else "8081"
+        url = f"http://192.168.137.94:{raw_port}/latest.jpg"
+        
         try:
-            r = requests.get(usb_url, timeout=1.5)
+            r = requests.get(url, timeout=1.0)
             if r.status_code == 200 and r.content:
-                # Transmet directement le Buffer Jpeg encodé depuis le serveur !
-                with _secondary_cam_lock:
-                    _secondary_frame = r.content
+                with _raw_cam_lock:
+                    _raw_frame = r.content
         except requests.exceptions.RequestException:
             pass
         
-        time.sleep(1/15.0)  # On limite à 15 FPS pour ne pas étouffer le Pi
+        time.sleep(1/15.0)
 
-def _ensure_secondary_started():
-    """Démarre le thread de la caméra secondaire si pas déjà actif."""
-    global _secondary_thread, _secondary_running
-    if not _secondary_running:
-        _secondary_running = True
-        _secondary_thread = threading.Thread(target=_run_secondary_cam, daemon=True)
-        _secondary_thread.start()
+def _ensure_raw_started():
+    global _raw_thread, _raw_running
+    if not _raw_running:
+        _raw_running = True
+        _raw_thread = threading.Thread(target=_run_raw_cam, daemon=True)
+        _raw_thread.start()
 
 def gen_frames_primary():
-    """Flux de la caméra principale (avec IA/YOLO/OCR)."""
+    """Flux avec IA/YOLO/OCR."""
     while True:
         frame = processor.get_frame()
         if frame is not None:
@@ -51,12 +53,12 @@ def gen_frames_primary():
         else:
             time.sleep(0.1)
 
-def gen_frames_secondary():
-    """Flux de la caméra secondaire (brut, sans IA)."""
-    _ensure_secondary_started()
+def gen_frames_raw():
+    """Flux brut, sans IA."""
+    _ensure_raw_started()
     while True:
-        with _secondary_cam_lock:
-            frame = _secondary_frame
+        with _raw_cam_lock:
+            frame = _raw_frame
         if frame is not None:
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
@@ -64,12 +66,16 @@ def gen_frames_secondary():
             time.sleep(0.1)
 
 @router.get("/video_feed")
-def video_feed(cam: str = Query(default="CAM_01_IN")):
+def video_feed(cam: str = Query(default="CSI")):
     """
-    Flux vidéo MJPEG.
-    - cam=CAM_01_IN  → Caméra principale (CSI/Nappe) avec overlay IA
-    - cam=CAM_02_OUT → Caméra secondaire (USB) flux brut
+    cam peut être "CSI" ou "USB".
+    Si cam == vision_camera (config), on renvoie gen_frames_primary (avec IA).
+    Sinon on renvoie gen_frames_raw (sans IA).
     """
-    if cam == "CAM_02_OUT":
-        return StreamingResponse(gen_frames_secondary(), media_type="multipart/x-mixed-replace; boundary=frame")
-    return StreamingResponse(gen_frames_primary(), media_type="multipart/x-mixed-replace; boundary=frame")
+    cfg = load_config()
+    ai_cam = cfg.get("vision_camera", "CSI")
+    
+    if cam == ai_cam:
+        return StreamingResponse(gen_frames_primary(), media_type="multipart/x-mixed-replace; boundary=frame")
+    else:
+        return StreamingResponse(gen_frames_raw(), media_type="multipart/x-mixed-replace; boundary=frame")

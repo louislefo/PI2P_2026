@@ -6,9 +6,9 @@ export default function DashboardView({
   status, history, plates, openDoor, API_BASE, config, setCurrentView 
 }) {
   const [videoError, setVideoError] = useState(false);
-  const [activeCam, setActiveCam] = useState('CAM_01_IN');
+  const [activeCam, setActiveCam] = useState('CSI');
   const [streamKey, setStreamKey] = useState(Date.now());
-  const inactiveCam = activeCam === 'CAM_01_IN' ? 'CAM_02_OUT' : 'CAM_01_IN';
+  const inactiveCam = activeCam === 'CSI' ? 'USB' : 'CSI';
   const videoRef = useRef(null);
 
   const authorizedCount = history.filter(h => isAuthorized(h.status)).length;
@@ -77,7 +77,7 @@ export default function DashboardView({
             {!videoError && (
               <img
                 src={`${API_BASE}/video_feed?cam=${activeCam}&t=${streamKey}`}
-                alt={`Flux ${activeCam} + OCR`}
+                alt={`Flux Caméra ${activeCam}`}
                 onError={() => setVideoError(true)}
               />
             )}
@@ -109,7 +109,7 @@ export default function DashboardView({
                 <img 
                   src={`${API_BASE}/video_feed?cam=${inactiveCam}&t=${streamKey}`} 
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                  alt="Caméra secondaire"
+                  alt={`Caméra ${inactiveCam}`}
                 />
               </div>
             )}
@@ -118,7 +118,7 @@ export default function DashboardView({
             {!videoError && (
               <div className="video-overlay-badge">
                 <span className="live-dot"></span>
-                <span>En Direct // {activeCam}</span>
+                <span>En Direct // Caméra {activeCam} {config?.vision_camera === activeCam ? '(IA)' : '(Brut)'}</span>
               </div>
             )}
 
