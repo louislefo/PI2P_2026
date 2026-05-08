@@ -24,8 +24,20 @@ export default function DashboardView({
     }
   };
 
-  const refreshStream = () => {
-    setStreamKey(Date.now());
+  const refreshStream = () => setStreamKey(Date.now());
+
+  // Logique de routage des flux : 
+  // L'IA est traitée par le backend PC, l'autre flux est lu directement depuis la Pi !
+  const aiCam = config?.vision_camera || 'CSI';
+  const piBase = "http://192.168.137.94";
+  
+  const getStreamUrl = (camType) => {
+    if (camType === aiCam) {
+      return `${API_BASE}/video_feed?t=${streamKey}`;
+    } else {
+      const port = camType === 'CSI' ? '8081' : '8082';
+      return `${piBase}:${port}/stream?t=${streamKey}`;
+    }
   };
 
   const startCall = () => {
@@ -74,9 +86,17 @@ export default function DashboardView({
         {/* Video Section */}
         <div className="video-section">
           <div className="video-frame" ref={videoRef}>
-            {!videoError && (
+            {videoError ? (
+              <div className="video-error-state">
+                <AlertCircle size={48} color="#ef4444" />
+                <p>Connexion à la caméra {activeCam} perdue</p>
+                <button onClick={() => { setVideoError(false); refreshStream(); }}>
+                  Réessayer
+                </button>
+              </div>
+            ) : (
               <img
-                src={`${API_BASE}/video_feed?cam=${activeCam}&t=${streamKey}`}
+                src={getStreamUrl(activeCam)}
                 alt={`Flux Caméra ${activeCam}`}
                 onError={() => setVideoError(true)}
               />
@@ -87,7 +107,7 @@ export default function DashboardView({
               <div 
                 className="pip-camera" 
                 onClick={() => setActiveCam(inactiveCam)}
-                title="Basculer vers cette caméra"
+                title={`Passer sur la caméra ${inactiveCam}`}
                 style={{
                   position: 'absolute',
                   bottom: '16px',
@@ -107,7 +127,7 @@ export default function DashboardView({
                 onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'}
               >
                 <img 
-                  src={`${API_BASE}/video_feed?cam=${inactiveCam}&t=${streamKey}`} 
+                  src={getStreamUrl(inactiveCam)} 
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                   alt={`Caméra ${inactiveCam}`}
                 />

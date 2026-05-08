@@ -12,5 +12,6 @@
         "person"
     ],
     "gate_open_time": 10,
-    "vision_camera": "USB"
+    "vision_camera": "CSI",
+    "ai_fps": 4
 }
