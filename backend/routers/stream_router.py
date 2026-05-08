@@ -34,7 +34,7 @@ def _run_raw_cam():
         except requests.exceptions.RequestException:
             pass
         
-        time.sleep(1/15.0)
+        time.sleep(1/30.0)
 
 def _ensure_raw_started():
     global _raw_thread, _raw_running
