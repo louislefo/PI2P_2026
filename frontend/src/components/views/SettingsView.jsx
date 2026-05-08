@@ -7,15 +7,13 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
   const initialMode = config.gate_mode || 'auto';
   const initialGateOpenTime = config.gate_open_time || 5;
   const initialDetection = config.detection_objects || ['car'];
-  const initialVisionCamera = config.vision_camera || 'CSI';
-  const initialAiFps = config.ai_fps || 3;
+  const initialAiFps = config.ai_fps || 4;
 
   // États locaux du formulaire
   const [localCode, setLocalCode] = useState(initialCode);
   const [localMode, setLocalMode] = useState(initialMode);
   const [localGateOpenTime, setLocalGateOpenTime] = useState(initialGateOpenTime);
   const [localDetection, setLocalDetection] = useState(initialDetection);
-  const [localVisionCamera, setLocalVisionCamera] = useState(initialVisionCamera);
   const [localAiFps, setLocalAiFps] = useState(initialAiFps);
   
   const [showCode, setShowCode] = useState(false);
@@ -27,8 +25,7 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
     setLocalMode(config.gate_mode || 'auto');
     setLocalGateOpenTime(config.gate_open_time || 5);
     setLocalDetection(config.detection_objects || ['car']);
-    setLocalVisionCamera(config.vision_camera || 'CSI');
-    setLocalAiFps(config.ai_fps || 3);
+    setLocalAiFps(config.ai_fps || 4);
   }, [config]);
 
   const handleSubmit = async (e) => {
@@ -41,7 +38,6 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
         gate_mode: localMode,
         gate_open_time: parseInt(localGateOpenTime, 10),
         detection_objects: localDetection,
-        vision_camera: localVisionCamera,
         ai_fps: parseInt(localAiFps, 10)
       };
 
@@ -169,47 +165,17 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
             </div>
           </section>
 
-          {/* Section Caméra */}
+          {/* Section Paramètres IA */}
           <section className="settings-section" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.5rem' }}>
             <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
               <div style={{ padding: '8px', background: 'rgba(6, 182, 212, 0.2)', borderRadius: '10px' }}>
                 <Camera size={20} color="#06b6d4" />
               </div>
-              <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#f8fafc' }}>Caméra d'Analyse IA</h2>
+              <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#f8fafc' }}>Paramètres IA (Caméra CSI)</h2>
             </div>
             <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              Choisissez la caméra utilisée par YOLO et EasyOCR pour détecter les véhicules et lire les plaques.
+              L'analyse IA est fixée sur la caméra CSI (Nappe) pour des performances optimales.
             </p>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <label style={{ 
-                position: 'relative', cursor: 'pointer', padding: '1.25rem', borderRadius: '12px',
-                border: localVisionCamera === 'CSI' ? '2px solid #06b6d4' : '1px solid rgba(255,255,255,0.1)',
-                background: localVisionCamera === 'CSI' ? 'rgba(6, 182, 212, 0.1)' : 'rgba(0,0,0,0.2)',
-                transition: 'all 0.2s'
-              }}>
-                <input type="radio" value="CSI" checked={localVisionCamera === 'CSI'} onChange={(e)=>setLocalVisionCamera(e.target.value)} style={{ display: 'none' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <strong style={{ color: localVisionCamera === 'CSI' ? '#06b6d4' : '#e2e8f0', fontSize: '1.1rem' }}>Caméra CSI</strong>
-                  {localVisionCamera === 'CSI' && <Check size={20} color="#06b6d4" />}
-                </div>
-                <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Module officiel OV5647 (Nappe)</div>
-              </label>
-
-              <label style={{ 
-                position: 'relative', cursor: 'pointer', padding: '1.25rem', borderRadius: '12px',
-                border: localVisionCamera === 'USB' ? '2px solid #06b6d4' : '1px solid rgba(255,255,255,0.1)',
-                background: localVisionCamera === 'USB' ? 'rgba(6, 182, 212, 0.1)' : 'rgba(0,0,0,0.2)',
-                transition: 'all 0.2s'
-              }}>
-                <input type="radio" value="USB" checked={localVisionCamera === 'USB'} onChange={(e)=>setLocalVisionCamera(e.target.value)} style={{ display: 'none' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <strong style={{ color: localVisionCamera === 'USB' ? '#06b6d4' : '#e2e8f0', fontSize: '1.1rem' }}>Caméra USB</strong>
-                  {localVisionCamera === 'USB' && <Check size={20} color="#06b6d4" />}
-                </div>
-                <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Webcam WCAM100BK</div>
-              </label>
-            </div>
 
             <div className="form-group" style={{ marginTop: '2rem' }}>
               <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>

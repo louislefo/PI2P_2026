@@ -125,10 +125,8 @@ class VisionProcessor:
             time.sleep(1)
 
         def get_frame():
-            """Récupère le dernier frame disponible sur le Pi."""
-            cam_setting = self.config.get("vision_camera", "CSI")
-            cam_port = "8082" if cam_setting == "USB" else "8081"
-            latest_url = f"http://192.168.137.94:{cam_port}/latest.jpg"
+            """Récupère le dernier frame disponible sur le Pi (Toujours CSI = 8081)."""
+            latest_url = "http://192.168.137.94:8081/latest.jpg"
             try:
                 r = requests.get(latest_url, timeout=1.5)
                 if r.status_code == 200 and r.content:
@@ -139,31 +137,36 @@ class VisionProcessor:
             return None
 
         # ── Boucle principale ───────────────────────────────────────────────────
+        last_yolo_time = 0
+        last_boxes = []
+
         while self.running:
-            # Limitation du FPS de l'IA (et du flux vidéo associé)
-            ai_fps = self.config.get("ai_fps", 3)
+            # L'IA est limitée, mais le flux brut de téléchargement depuis la Pi va aussi vite que possible (limité par time.sleep(1/30.0))
+            ai_fps = self.config.get("ai_fps", 4)
             try: ai_fps = int(ai_fps)
-            except: ai_fps = 3
+            except: ai_fps = 4
             if ai_fps < 1: ai_fps = 1
             if ai_fps > 30: ai_fps = 30
-            frame_interval = 1.0 / ai_fps
+            yolo_interval = 1.0 / ai_fps
 
             frame = get_frame()
             if frame is None:
-                time.sleep(0.1)
+                time.sleep(0.05)
                 continue
 
             annotated_frame = frame.copy()
             if self.model:
                 current_time = time.time()
 
-                # --- Détection Multiple (Véhicules, Humains, Animaux, Vélos) ---
-                # YOLO détecte TOUT en une seule passe (c'est très rapide), imgsz=640 limite la charge CPU
-                target_ids = [0, 1, 2, 3, 5, 7, 15, 16] 
-                results = self.model(frame, imgsz=640, classes=target_ids, verbose=False)
-
-                # On garde les boxes pour dessiner
-                last_boxes = results[0].boxes
+                if current_time - last_yolo_time >= yolo_interval:
+                    # --- Détection Multiple (Véhicules, Humains, Animaux, Vélos) ---
+                    # YOLO détecte TOUT en une seule passe (c'est très rapide), imgsz=640 limite la charge CPU
+                    target_ids = [0, 1, 2, 3, 5, 7, 15, 16] 
+                    results = self.model(frame, imgsz=640, classes=target_ids, verbose=False)
+    
+                    # On garde les boxes pour dessiner
+                    last_boxes = results[0].boxes
+                    last_yolo_time = current_time
 
                 # --- LANCEMENT OCR INTELLIGENT ---
                 cfg = load_config()
@@ -208,8 +211,8 @@ class VisionProcessor:
                 with self.lock:
                     self.latest_frame = buffer.tobytes()
 
-            if frame_interval > 0:
-                time.sleep(frame_interval)
+            # Boucle réseau à ~30 FPS pour un flux très fluide
+            time.sleep(1/30.0)
             
     def _run_ocr_thread(self, enlarged_img, color_roi, current_time):
         import difflib
