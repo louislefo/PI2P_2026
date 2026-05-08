@@ -27,6 +27,7 @@ def capture_loop():
                 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
                 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
                 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+                cap.set(cv2.CAP_PROP_FPS, 30)
                 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 
                 # Test de lecture pour s'assurer que ça marche vraiment
@@ -61,7 +62,6 @@ def capture_loop():
             frame_event.set()
             frame_event.clear()
             
-        # Limite à 30 FPS pour ne pas surcharger le réseau/CPU
         time.sleep(1/30.0)
 
 # ──────────────────────────────────────────────────────────────────────

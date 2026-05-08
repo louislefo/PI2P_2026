@@ -159,10 +159,9 @@ class VisionProcessor:
                 current_time = time.time()
 
                 if current_time - last_yolo_time >= yolo_interval:
-                    # --- Détection Multiple (Véhicules, Humains, Animaux, Vélos) ---
-                    # YOLO détecte TOUT en une seule passe (c'est très rapide), imgsz=640 limite la charge CPU
+                    # YOLO en résolution 1280 pour une meilleure lecture de plaque
                     target_ids = [0, 1, 2, 3, 5, 7, 15, 16] 
-                    results = self.model(frame, imgsz=640, classes=target_ids, verbose=False)
+                    results = self.model(frame, imgsz=1280, classes=target_ids, verbose=False)
     
                     # On garde les boxes pour dessiner
                     last_boxes = results[0].boxes

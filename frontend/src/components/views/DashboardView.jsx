@@ -26,18 +26,19 @@ export default function DashboardView({
 
   const refreshStream = () => setStreamKey(Date.now());
 
-  // Logique de routage des flux : 
-  // L'IA est traitée par le backend PC, l'autre flux est lu directement depuis la Pi !
-  const aiCam = config?.vision_camera || 'CSI';
-  const piBase = "http://192.168.137.94";
-  
+  // CSI = flux IA via backend (/video_feed)
+  // USB = flux brut proxifié via backend (/video_feed_raw)
   const getStreamUrl = (camType) => {
-    if (camType === aiCam) {
+    if (camType === 'CSI') {
       return `${API_BASE}/video_feed?t=${streamKey}`;
     } else {
-      const port = camType === 'CSI' ? '8081' : '8082';
-      return `${piBase}:${port}/stream?t=${streamKey}`;
+      return `${API_BASE}/video_feed_raw?t=${streamKey}`;
     }
+  };
+
+  const getCamLabel = (camType) => {
+    if (camType === 'CSI') return 'CSI (Nappe - IA)';
+    return 'USB (Webcam - Brut)';
   };
 
   const startCall = () => {
@@ -138,7 +139,7 @@ export default function DashboardView({
             {!videoError && (
               <div className="video-overlay-badge">
                 <span className="live-dot"></span>
-                <span>En Direct // Caméra {activeCam} {config?.vision_camera === activeCam ? '(IA)' : '(Brut)'}</span>
+                <span>En Direct // {getCamLabel(activeCam)}</span>
               </div>
             )}
 
