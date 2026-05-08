@@ -27,14 +27,19 @@ frame_event = threading.Event()  # Signal : un nouveau frame est dispo
 def capture_loop():
     global latest_frame
 
-    # Paramètres caméra CSI (3 fps = assez pour YOLO + lecture plaque)
+    # Paramètres caméra CSI — résolution HD pour meilleure lecture de plaques
     CMD = [
         "rpicam-vid",
         "-t", "0",               # Durée infinie
-        "--width", "640",
-        "--height", "480",
-        "--framerate", "5",
+        "--width", "1280",
+        "--height", "720",
+        "--framerate", "10",     # 10fps : fluidité + faible charge CPU
         "--codec", "mjpeg",
+        "--quality", "85",       # Qualité JPEG (0-100)
+        "--sharpness", "1.5",    # Netteté accrue pour les plaques
+        "--contrast", "1.2",     # Meilleur contraste texte/fond
+        "--awb", "auto",         # Balance des blancs automatique
+        "--metering", "centre",  # Exposition centrée sur la zone d'intérêt
         "--nopreview",
         "-o", "-",               # Sortie sur stdout
     ]
