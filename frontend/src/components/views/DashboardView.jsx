@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { DoorOpen, PhoneCall, BarChart3, Clock, Camera, Maximize, RefreshCcw } from 'lucide-react';
+import { DoorOpen, PhoneCall, BarChart3, Clock, Camera, Maximize, RefreshCcw, AlertCircle } from 'lucide-react';
 import { isAuthorized, formatDate } from '../../utils/helpers';
 
 export default function DashboardView({ 
@@ -28,15 +28,19 @@ export default function DashboardView({
     setStreamKey(Date.now());
   };
 
-  const simulateCall = () => {
+  const startCall = () => {
+    if (window.startDirectCall) {
+      window.startDirectCall();
+    } else {
+      console.warn("L'interphone n'est pas prêt.");
+    }
+  };
+
+  const toggleEmergency = async () => {
     try {
-      const ws = new WebSocket(`ws://192.168.137.94:8083/ws/call`);
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ action: 'test' }));
-        setTimeout(() => ws.close(), 500);
-      };
-    } catch(err) {
-      console.error("Erreur simulateCall:", err);
+      await fetch(`http://192.168.137.94:8083/servo/emergency/toggle`, { method: 'POST' });
+    } catch (e) {
+      console.error("Erreur toggleEmergency:", e);
     }
   };
 
@@ -168,9 +172,21 @@ export default function DashboardView({
             <span className="btn-sublabel">Manuel</span>
           </button>
 
-          <button className="side-ctrl-btn call" title="Appel Gardien" onClick={simulateCall}>
+          <button className="side-ctrl-btn call" title="Appel" onClick={startCall}>
             <PhoneCall size={28} />
-            <span>Appel SOS</span>
+            <span>Appel</span>
+          </button>
+
+          <button 
+            className={`side-ctrl-btn barrier ${status.emergency_stop ? 'open' : ''}`} 
+            title="Arrêt d'Urgence" 
+            onClick={toggleEmergency}
+            style={status.emergency_stop ? { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#ef4444' } : {}}
+          >
+            <AlertCircle size={28} color={status.emergency_stop ? '#ef4444' : 'white'} />
+            <span style={{ color: status.emergency_stop ? '#ef4444' : 'white', fontSize: '0.85rem' }}>
+              {status.emergency_stop ? 'Urgence Activée' : "Arrêt d'Urgence"}
+            </span>
           </button>
         </div>
       </div>

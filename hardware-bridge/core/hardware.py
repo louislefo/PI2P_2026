@@ -77,6 +77,7 @@ _servo_angle = 0
 _servo_lock = threading.Lock()
 _auto_close_timer = None
 _orange_led_timer = None
+_emergency_stop = False
 
 def _angle_to_servo_value(angle: int) -> float:
     raw = -(angle / 90.0)
@@ -102,9 +103,22 @@ def set_leds_state(green=False, orange=False, red=False):
     if red: led_red.on()
     else: led_red.off()
 
+def toggle_emergency_stop():
+    global _emergency_stop
+    _emergency_stop = not _emergency_stop
+    print(f"🚨 [URGENCE] État: {'ACTIVÉ' if _emergency_stop else 'Désactivé'}")
+    return _emergency_stop
+
+def get_emergency_stop():
+    return _emergency_stop
+
 def move_servo(angle: int, auto_close: bool = False, delay: int = 5):
-    global _servo_angle, _auto_close_timer, _orange_led_timer
+    global _servo_angle, _auto_close_timer, _orange_led_timer, _emergency_stop
     
+    if _emergency_stop:
+        print("⛔ [SERVO] Déplacement ignoré : ARRÊT D'URGENCE ACTIVÉ")
+        return
+        
     angle = max(0, min(180, angle))
     value = _angle_to_servo_value(angle)
     label = "FERMÉ" if angle < 45 else "OUVERT"

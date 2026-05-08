@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from core.hardware import move_servo, get_leds, is_gpio_available, get_servo_angle, set_leds_state, _angle_to_servo_value
+from core.hardware import move_servo, get_leds, is_gpio_available, get_servo_angle, set_leds_state, _angle_to_servo_value, toggle_emergency_stop, get_emergency_stop
 from core.audio import play_pattern
 
 router = APIRouter(tags=["Hardware"])
@@ -21,7 +21,8 @@ def get_status():
             "angle":     angle,
             "is_open":   angle >= 45,
             "is_closed": angle < 45,
-        }
+        },
+        "emergency_stop": get_emergency_stop()
     }
 
 @router.post("/led/{color}/{state}")
@@ -47,6 +48,8 @@ def control_led(color: str, state: str):
 
 @router.post("/servo/{angle}")
 def control_servo(angle: int, auto_close: bool = False, delay: int = 5):
+    if get_emergency_stop():
+        raise HTTPException(status_code=403, detail="Arrêt d'urgence activé, mouvement bloqué.")
     move_servo(angle, auto_close, delay)
     return {
         "angle": angle,
@@ -55,6 +58,11 @@ def control_servo(angle: int, auto_close: bool = False, delay: int = 5):
         "auto_close": auto_close,
         "delay": delay
     }
+
+@router.post("/servo/emergency/toggle")
+def toggle_emergency():
+    state = toggle_emergency_stop()
+    return {"status": "success", "emergency_stop": state}
 
 class AudioRequest(BaseModel):
     freq: int = 880

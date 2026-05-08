@@ -258,6 +258,11 @@ export default function IntercomSystem({ openDoor }) {
     _startPiMicStream();
   }, [_startPiMicStream]);
 
+  useEffect(() => {
+    window.startDirectCall = answer;
+    return () => { delete window.startDirectCall; };
+  }, [answer]);
+
   const _hangup = useCallback((notifyWs = true) => {
     stopRingRef.current?.();
     stopRingRef.current = null;

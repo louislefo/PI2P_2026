@@ -23,14 +23,17 @@ async def websocket_endpoint(websocket: WebSocket):
                 resp = await asyncio.to_thread(requests.get, "http://192.168.137.94:8083/status", timeout=0.5)
                 hw_state = resp.json()
                 door_open = hw_state.get("servo", {}).get("is_open", False)
+                emergency_stop = hw_state.get("emergency_stop", False)
             except Exception:
                 door_open = False
+                emergency_stop = False
                 
             from services.vision import processor
             state = {
                 "door_open": door_open,
                 "car_present": False,
-                "tested_cars": processor.tested_cars_count
+                "tested_cars": processor.tested_cars_count,
+                "emergency_stop": emergency_stop
             }
             await websocket.send_json({"type": "status", "data": state})
     except Exception:

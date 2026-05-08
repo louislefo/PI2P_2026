@@ -184,7 +184,7 @@ export default function TestView() {
   ];
 
   return (
-    <div style={{ padding: '1rem', maxWidth: 1200, margin: '0 auto' }}>
+    <div style={{ padding: '1rem', maxWidth: 1200, margin: '0 auto', background: '#0f172a', minHeight: '100vh', borderRadius: '16px', color: '#f1f5f9' }}>
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
