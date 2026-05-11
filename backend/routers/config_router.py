@@ -55,6 +55,13 @@ def update_settings(data: SettingsRequest):
     # Changement du code d'entrée
     if data.entry_code is not None:
         cfg["entry_code"] = data.entry_code
+        # Sync avec le hardware bridge
+        import requests
+        try:
+            requests.post("http://192.168.137.94:8083/config/code", json={"code": data.entry_code}, timeout=2)
+            print(f"🔐 [CONFIG] Code synchronisé avec le bridge: {data.entry_code}")
+        except Exception as e:
+            print(f"⚠️ [CONFIG] Impossible de synchroniser le code avec le bridge: {e}")
         
     # Mise à jour des objets à détecter
     if data.detection_objects is not None:

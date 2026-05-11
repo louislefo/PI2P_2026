@@ -9,12 +9,18 @@ PIN_LED_RED    = int(os.environ.get("PIN_LED_RED",    "22"))  # Board 15
 PIN_SERVO      = int(os.environ.get("PIN_SERVO",      "12"))  # Board 32 / PWM0
 PIN_BUTTON     = int(os.environ.get("PIN_BUTTON",     "26"))  # Board 37
 
+# Matrix Keypad Pins (BCM)
+# Lignes: 14, 15, 18, 23
+# Colonnes: 24, 25, 8, 7
+PINS_ROWS = [14, 15, 18, 23]
+PINS_COLS = [24, 25, 8, 7]
+
 SERVO_DETACH_DELAY = float(os.environ.get("SERVO_DETACH_DELAY_S", "0.6"))
 
 try:
     if sys.platform == "win32":
         raise ImportError("Windows détecté → Mock GPIO activé")
-    from gpiozero import LED, Servo, Button
+    from gpiozero import LED, Servo, Button, DigitalOutputDevice, DigitalInputDevice
     from gpiozero.pins.lgpio import LGPIOFactory
     factory = LGPIOFactory()
 
@@ -28,6 +34,11 @@ try:
         max_pulse_width=2.5 / 1000,
     )
     call_button = Button(PIN_BUTTON, pull_up=True, bounce_time=0.05, pin_factory=factory)
+
+    # Keypad setup
+    rows = [DigitalOutputDevice(pin, pin_factory=factory) for pin in PINS_ROWS]
+    cols = [DigitalInputDevice(pin, pull_up=False, pin_factory=factory) for pin in PINS_COLS]
+
     GPIO_AVAILABLE = True
     print(f"✅ [HW-CORE] GPIO lgpio initialisé avec succès")
 
@@ -65,13 +76,42 @@ except Exception as e:
             self.when_pressed = None
             print(f"   🔘 [MOCK] Bouton BCM{self.pin} configuré")
 
+    class MockKeypadPin:
+        def __init__(self, pin):
+            self.pin = pin
+            self.value = 0
+        def on(self): self.value = 1
+        def off(self): self.value = 0
+
     led_green  = MockLED(PIN_LED_GREEN)
     led_orange = MockLED(PIN_LED_ORANGE)
     led_red    = MockLED(PIN_LED_RED)
     servo      = MockServo(PIN_SERVO)
     call_button = MockButton(PIN_BUTTON)
+    
+    rows = [MockKeypadPin(p) for p in PINS_ROWS]
+    cols = [MockKeypadPin(p) for p in PINS_COLS]
 
 leds = {"green": led_green, "orange": led_orange, "red": led_red}
+
+# Touches du clavier
+KEYMAP = [
+    ["1", "2", "3", "A"],
+    ["4", "5", "6", "B"],
+    ["7", "8", "9", "C"],
+    ["*", "0", "#", "D"]
+]
+
+def scan_keypad():
+    """Scanne le clavier matriciel et retourne la touche pressée ou None."""
+    for r_idx, row in enumerate(rows):
+        row.on()
+        for c_idx, col in enumerate(cols):
+            if col.value:
+                row.off()
+                return KEYMAP[r_idx][c_idx]
+        row.off()
+    return None
 
 _servo_angle = 0
 _servo_lock = threading.Lock()

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Lightbulb, Zap, Volume2, Camera, Activity, 
-  RotateCcw, Power, CheckCircle, XCircle, AlertCircle, Phone, Mic, MicOff, Headphones
+  RotateCcw, Power, CheckCircle, XCircle, AlertCircle, Phone, Mic, MicOff, Headphones, Hash
 } from 'lucide-react';
 
 const HW_BASE = 'http://192.168.137.94:8083';
@@ -99,6 +99,9 @@ export default function TestView() {
   const [isListeningPi, setIsListeningPi] = useState(false);
   const [isSpeakingPc, setIsSpeakingPc] = useState(false);
   
+  const [keypadLog, setKeypadLog] = useState([]);
+  const [keypadBuffer, setKeypadBuffer] = useState('');
+
   const piAudioCtxRef = useRef(null);
   const piWsRef = useRef(null);
   const piNextTimeRef = useRef(0);
@@ -126,6 +129,27 @@ export default function TestView() {
     poll();
     const id = setInterval(poll, 2000);
     return () => clearInterval(id);
+  }, []);
+
+  // ── Keypad WebSocket ─────────────────────────────────────────────────────
+  useEffect(() => {
+    let ws;
+    const connect = () => {
+      ws = new WebSocket(`${HW_BASE.replace('http', 'ws')}/ws/keypad`);
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.event === 'key_press') {
+          const now = new Date().toLocaleTimeString('fr-FR');
+          setKeypadLog(p => [`${now} — Touche: ${data.key}`, ...p].slice(0, 5));
+          setKeypadBuffer(data.buffer);
+        }
+      };
+      ws.onclose = () => {
+        setTimeout(connect, 3000);
+      };
+    };
+    connect();
+    return () => ws?.close();
   }, []);
 
   // ── Actions ──────────────────────────────────────────────────────────────
@@ -476,6 +500,53 @@ export default function TestView() {
           }}>
             {hwStatus ? JSON.stringify(hwStatus, null, 2) : hwOnline ? 'Chargement...' : 'Hardware bridge hors ligne\nVérifier : docker logs pi2p_2026-hardware-bridge-1'}
           </pre>
+        </TestCard>
+
+        {/* ── Clavier ── */}
+        <TestCard title="Clavier Matriciel" icon={Hash} accent="#f59e0b">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{
+              padding: '0.75rem', borderRadius: 10,
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '0.25rem' }}>Buffer actuel</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#f59e0b', letterSpacing: 4 }}>
+                {keypadBuffer || '—'}
+              </div>
+            </div>
+
+            <div style={{
+              padding: '0.75rem', borderRadius: 8,
+              background: '#0f172a', border: '1px solid rgba(255,255,255,0.06)',
+              minHeight: 100, fontFamily: 'monospace', fontSize: '0.72rem', color: '#64748b',
+            }}>
+              {keypadLog.length === 0
+                ? <span style={{ color: '#334155' }}>— Aucune touche pressée —</span>
+                : keypadLog.map((l, i) => <div key={i} style={{ color: i === 0 ? '#f59e0b' : '#475569' }}>› {l}</div>)
+              }
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem' }}>
+              {['1','2','3','A','4','5','6','B','7','8','9','C','*','0','#','D'].map(k => (
+                <ActionBtn
+                  key={k}
+                  onClick={() => fetch(`${HW_BASE}/test/press/${k}`, { method: 'POST' })}
+                  color="#f59e0b"
+                  size="sm"
+                  disabled={!hwOnline}
+                >
+                  {k}
+                </ActionBtn>
+              ))}
+            </div>
+            
+            <div style={{ fontSize: '0.7rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <AlertCircle size={12} />
+              Les touches ci-dessus simulent une pression physique (utile en mode MOCK).
+            </div>
+          </div>
         </TestCard>
 
         {/* ── Interphone ── */}
