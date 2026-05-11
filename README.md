@@ -1,7 +1,6 @@
 # 🅿️ PI2P 2026 - Central Command Center
 
 <div align="center">
-  <img src="frontend/src/assets/hero.png" alt="PI2P Banner" width="800">
   <br />
   <p align="center">
     <b>Système de gestion de parking intelligent de nouvelle génération.</b>
@@ -23,11 +22,11 @@ Le projet **PI2P 2026** est une solution complète de contrôle d'accès automat
 
 ### 🌟 Fonctionnalités Clés
 
-- **🤖 Vision IA de Pointe** : Détection temps réel (YOLOv8) et reconnaissance de plaques (EasyOCR).
-- **🛡️ Command Center Industriel** : Dashboard React ultra-réactif avec flux vidéo et overlays IA.
-- **📱 Intercom & Hardware** : Système audio bidirectionnel, digicode physique et gestion de servo-moteur.
-- **📊 Gestion de Base de Données** : Administration complète des plaques autorisées avec dates de validité.
-- **🔌 Architecture Distribuée** : Ponts dédiés pour la caméra et le hardware afin de maximiser les performances.
+- ** Vision IA de Pointe** : Détection temps réel (YOLOv8) et reconnaissance de plaques (EasyOCR).
+- ** Command Center Industriel** : Dashboard React ultra-réactif avec flux vidéo et overlays IA.
+- ** Intercom & Hardware** : Système audio bidirectionnel, digicode physique et gestion de servo-moteur.
+- ** Gestion de Base de Données** : Administration complète des plaques autorisées avec dates de validité.
+- ** Architecture Distribuée** : Ponts dédiés pour la caméra et le hardware afin de maximiser les performances.
 
 ---
 
