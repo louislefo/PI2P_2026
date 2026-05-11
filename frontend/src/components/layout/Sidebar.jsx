@@ -1,13 +1,14 @@
 import React from 'react';
-import { LayoutDashboard, Database, ScrollText, Settings, PanelLeftOpen, PanelLeftClose, AlertTriangle, Shield } from 'lucide-react';
+import { LayoutDashboard, Database, ScrollText, Settings, PanelLeftOpen, PanelLeftClose, AlertTriangle, Shield, Wrench } from 'lucide-react';
 
 const navItems = [
   { id: 'dashboard', label: 'Tableau de Bord', icon: LayoutDashboard },
   { id: 'database', label: 'Base de Données', icon: Database },
   { id: 'logs', label: "Journal d'Activité", icon: ScrollText },
+  { id: 'test', label: 'Test Hardware', icon: Wrench },
 ];
 
-export default function Sidebar({ currentView, setCurrentView, collapsed, setCollapsed }) {
+export default function Sidebar({ currentView, setCurrentView, collapsed, setCollapsed, status, toggleEmergency }) {
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       {/* Logo / Title */}
@@ -57,9 +58,14 @@ export default function Sidebar({ currentView, setCurrentView, collapsed, setCol
           }
         </button>
 
-        <button className="emergency-btn" title="Arrêt d'Urgence">
+        <button 
+          className={`emergency-btn ${status?.emergency_stop ? 'active' : ''}`} 
+          title="Arrêt d'Urgence"
+          onClick={toggleEmergency}
+          style={status?.emergency_stop ? { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#ef4444', color: '#ef4444' } : {}}
+        >
           <AlertTriangle size={18} />
-          <span className="emergency-label">Arrêt d'Urgence</span>
+          <span className="emergency-label">{status?.emergency_stop ? 'Urgence Activée' : "Arrêt d'Urgence"}</span>
         </button>
       </div>
     </aside>

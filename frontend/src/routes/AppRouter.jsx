@@ -3,6 +3,7 @@ import DashboardView from '../components/views/DashboardView';
 import DatabaseView from '../components/views/DatabaseView';
 import LogsView from '../components/views/LogsView';
 import SettingsView from '../components/views/SettingsView';
+import TestView from '../components/views/TestView';
 
 export default function AppRouter({ 
   currentView, 
@@ -28,6 +29,7 @@ export default function AppRouter({
           plates={plates}
           openDoor={openDoor}
           API_BASE={API_BASE}
+          config={config}
           setCurrentView={setCurrentView}
         />
       );
@@ -58,6 +60,8 @@ export default function AppRouter({
           API_BASE={API_BASE}
         />
       );
+    case 'test':
+      return <TestView />;
     default:
       return (
         <DashboardView 
@@ -66,6 +70,7 @@ export default function AppRouter({
           plates={plates}
           openDoor={openDoor}
           API_BASE={API_BASE}
+          config={config}
           setCurrentView={setCurrentView}
         />
       );

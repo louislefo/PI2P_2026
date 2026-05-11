@@ -16,9 +16,24 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             await asyncio.sleep(1)
+            # Récupérer l'état réel depuis le Raspberry Pi
+            import requests
+            try:
+                # Requête asynchrone / courte pour ne pas bloquer trop longtemps
+                resp = await asyncio.to_thread(requests.get, "http://192.168.137.94:8083/status", timeout=0.5)
+                hw_state = resp.json()
+                door_open = hw_state.get("servo", {}).get("is_open", False)
+                emergency_stop = hw_state.get("emergency_stop", False)
+            except Exception:
+                door_open = False
+                emergency_stop = False
+                
+            from services.vision import processor
             state = {
-                "door_open": bool(relay.value),
-                "car_present": bool(door_sensor.is_pressed)
+                "door_open": door_open,
+                "car_present": False,
+                "tested_cars": processor.tested_cars_count,
+                "emergency_stop": emergency_stop
             }
             await websocket.send_json({"type": "status", "data": state})
     except Exception:
@@ -49,9 +64,13 @@ async def trigger_access(req: AccessRequest):
     
     cfg = load_config()
     if cfg.get("gate_mode", "auto") == "auto":
-        relay.on()
-        await asyncio.sleep(5)
-        relay.off()
+        import requests
+        try:
+            delay = cfg.get("gate_open_time", 5)
+            requests.post(f"http://192.168.137.94:8083/servo/90?auto_close=true&delay={delay}", timeout=2)
+            print(f"✅ [SYSTEM] Barrière ouverte via Hardware Bridge (IA) - {delay}s")
+        except Exception as e:
+            print(f"❌ [SYSTEM] Erreur ouverture barrière: {e}")
     return {"status": "success"}
 
 @router.post("/door/open")
@@ -67,9 +86,13 @@ async def open_door():
     await broadcast_history()
     
     if cfg.get("gate_mode", "auto") == "auto":
-        relay.on()
-        await asyncio.sleep(5)
-        relay.off()
+        import requests
+        try:
+            delay = cfg.get("gate_open_time", 5)
+            requests.post(f"http://192.168.137.94:8083/servo/90?auto_close=true&delay={delay}", timeout=2)
+            print(f"✅ [SYSTEM] Barrière ouverte via Hardware Bridge (Manuel) - {delay}s")
+        except Exception as e:
+            print(f"❌ [SYSTEM] Erreur ouverture barrière: {e}")
     return {"status": "success", "message": "Door opened manually"}
 
 @router.delete("/api/history/{log_id}")

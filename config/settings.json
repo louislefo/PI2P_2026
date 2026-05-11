@@ -4,11 +4,14 @@
     "door_sensor_pin": 27,
     "yolo_model_path": "yolov8n.pt",
     "confidence_threshold": 0.5,
-    "entry_code": "2635#",
+    "entry_code": "123#",
     "gate_mode": "auto",
     "detection_objects": [
         "car",
         "bicycle",
         "person"
-    ]
+    ],
+    "gate_open_time": 10,
+    "vision_camera": "USB",
+    "ai_fps": 4
 }

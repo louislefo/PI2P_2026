@@ -5,6 +5,8 @@ import './App.css';
 import Sidebar from './components/layout/Sidebar';
 import CommandHeader from './components/layout/CommandHeader';
 import AppRouter from './routes/AppRouter';
+import IntercomSystem from './components/IntercomSystem';
+
 
 function App() {
   const [status, setStatus] = useState({ door_open: false, car_present: false });
@@ -15,7 +17,8 @@ function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [isOnline, setIsOnline] = useState(false);
 
-  const API_BASE = `http://${window.location.hostname}:8000`;
+
+  const API_BASE = `http://192.168.137.1:8000`; // `http://${window.location.hostname}:8000`;
 
   // Fetch initial data
   useEffect(() => {
@@ -29,7 +32,7 @@ function App() {
     let reconnectTimer;
 
     const connect = () => {
-      ws = new WebSocket(`ws://${window.location.hostname}:8000/ws`);
+      ws = new WebSocket(`ws://192.168.137.1:8000/ws`);
 
       ws.onopen = () => {
         setIsOnline(true);
@@ -135,13 +138,26 @@ function App() {
     }
   };
 
+  const toggleEmergency = async () => {
+    try {
+      await fetch(`http://192.168.137.94:8083/servo/emergency/toggle`, { method: 'POST' });
+    } catch (e) {
+      console.error("Erreur toggleEmergency:", e);
+    }
+  };
+
   return (
     <div className="app-shell">
+      {/* Interphone — flottant sur toutes les pages */}
+      <IntercomSystem openDoor={openDoor} />
+
       <Sidebar 
         currentView={currentView}
         setCurrentView={setCurrentView}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
+        status={status}
+        toggleEmergency={toggleEmergency}
       />
       
       <main className="main-content">

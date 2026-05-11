@@ -5,11 +5,13 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
   // Extraction des valeurs de la config avec fallbacks
   const initialCode = config.entry_code || '0000#';
   const initialMode = config.gate_mode || 'auto';
+  const initialGateOpenTime = config.gate_open_time || 5;
   const initialDetection = config.detection_objects || ['car'];
 
   // États locaux du formulaire
   const [localCode, setLocalCode] = useState(initialCode);
   const [localMode, setLocalMode] = useState(initialMode);
+  const [localGateOpenTime, setLocalGateOpenTime] = useState(initialGateOpenTime);
   const [localDetection, setLocalDetection] = useState(initialDetection);
   const [showCode, setShowCode] = useState(false);
   const [savedStatus, setSavedStatus] = useState('');
@@ -18,6 +20,7 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
   useEffect(() => {
     setLocalCode(config.entry_code || '0000#');
     setLocalMode(config.gate_mode || 'auto');
+    setLocalGateOpenTime(config.gate_open_time || 5);
     setLocalDetection(config.detection_objects || ['car']);
   }, [config]);
 
@@ -29,6 +32,7 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
       const payload = {
         entry_code: localCode,
         gate_mode: localMode,
+        gate_open_time: parseInt(localGateOpenTime, 10),
         detection_objects: localDetection
       };
 
@@ -137,6 +141,19 @@ export default function SettingsView({ config, setConfig, API_BASE }) {
                   {showCode ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
+            </div>
+
+            <div className="form-group" style={{ marginTop: '1.5rem' }}>
+              <label>Temps d'ouverture (secondes)</label>
+              <input 
+                type="number" 
+                min="1"
+                max="60"
+                value={localGateOpenTime} 
+                onChange={(e) => setLocalGateOpenTime(e.target.value)} 
+                className="pin-input"
+                style={{ width: '100px', textAlign: 'center' }}
+              />
             </div>
           </section>
 

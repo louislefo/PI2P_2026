@@ -61,6 +61,7 @@ def load_config():
             # Ajout des valeurs par défaut si elles sont manquantes dans le JSON
             if "entry_code" not in cfg: cfg["entry_code"] = "0000#"
             if "gate_mode" not in cfg: cfg["gate_mode"] = "auto"
+            if "gate_open_time" not in cfg: cfg["gate_open_time"] = 5
             if "detection_objects" not in cfg: cfg["detection_objects"] = ["car"]
             return cfg
     except Exception as e:
@@ -73,6 +74,7 @@ def load_config():
             "confidence_threshold": 0.5,
             "entry_code": "0000#",
             "gate_mode": "auto",
+            "gate_open_time": 5,
             "detection_objects": ["car"]
         }
 
