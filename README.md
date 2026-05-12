@@ -1,4 +1,4 @@
-# 🅿️ PI2P 2026 - Central Command Center
+# PI2P 2026 - Central Command Center
 
 <div align="center">
   <br />
@@ -16,21 +16,21 @@
 
 ---
 
-## 🚀 Vue d'Ensemble
+## Vue d'Ensemble
 
 Le projet **PI2P 2026** est une solution complète de contrôle d'accès automatisé. Grâce à l'IA, le système identifie les véhicules, lit leurs plaques d'immatriculation et pilote une barrière physique en fonction des autorisations stockées en base de données.
 
-### 🌟 Fonctionnalités Clés
+### Fonctionnalités Clés
 
-- ** Vision IA de Pointe** : Détection temps réel (YOLOv8) et reconnaissance de plaques (EasyOCR).
-- ** Command Center Industriel** : Dashboard React ultra-réactif avec flux vidéo et overlays IA.
-- ** Intercom & Hardware** : Système audio bidirectionnel, digicode physique et gestion de servo-moteur.
-- ** Gestion de Base de Données** : Administration complète des plaques autorisées avec dates de validité.
-- ** Architecture Distribuée** : Ponts dédiés pour la caméra et le hardware afin de maximiser les performances.
+- **Vision IA de Pointe** : Détection temps réel (YOLOv8) et reconnaissance de plaques (EasyOCR).
+- **Command Center Industriel** : Dashboard React ultra-réactif avec flux vidéo et overlays IA.
+- **Intercom & Hardware** : Système audio bidirectionnel, digicode physique et gestion de servo-moteur.
+- **Gestion de Base de Données** : Administration complète des plaques autorisées avec dates de validité.
+- **Architecture Distribuée** : Ponts dédiés pour la caméra et le hardware afin de maximiser les performances.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Module | Technologies |
 | :--- | :--- |
@@ -42,7 +42,7 @@ Le projet **PI2P 2026** est une solution complète de contrôle d'accès automat
 
 ---
 
-## 🏗️ Architecture du Projet
+## Architecture du Projet
 
 Le projet est découpé en services modulaires pour une robustesse maximale :
 
@@ -56,23 +56,23 @@ Le projet est découpé en services modulaires pour une robustesse maximale :
 
 ---
 
-## 📸 Captures d'Écran
+## Captures d'Écran
 
-### 📟 Tableau de Bord (Live View)
+### Tableau de Bord (Live View)
 Interface principale permettant de surveiller le flux vidéo avec les annotations de l'IA en temps réel.
 ![Tableau de bord](.documents/image_readme/TDB.png)
 
-### 📂 Gestion des Accès
+### Gestion des Accès
 Interface d'administration pour ajouter, modifier ou supprimer des plaques autorisées.
 ![base de données](.documents/image_readme/basededonnées.png)
 
-### 📜 Journal d'Activité
+### Journal d'Activité
 Historique complet des passages avec horodatage et captures d'écran des plaques détectées.
 ![Journal d'activité](.documents/image_readme/Historique.png)
 
 ---
 
-## ⚡ Installation Rapide
+## Installation Rapide
 
 ### Avec Docker (Recommandé)
 ```bash
