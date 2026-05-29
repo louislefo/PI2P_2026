@@ -17,8 +17,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # ─── Frame partagé entre le thread de capture et les clients HTTP ───
 latest_frame: bytes | None = None
-frame_lock = threading.Lock()
-frame_event = threading.Event()  # Signal : un nouveau frame est dispo
+frame_lock = threading.Condition(threading.Lock())
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -50,13 +49,21 @@ def capture_loop():
             proc = subprocess.Popen(
                 CMD,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,  # On capture stderr séparément
             )
+            
+            # Thread pour logger stderr
+            def log_stderr(pipe):
+                for line in iter(pipe.readline, b""):
+                    print(f"⚠️ [rpicam-vid] {line.decode('utf-8', errors='ignore').strip()}", flush=True)
+            
+            stderr_thread = threading.Thread(target=log_stderr, args=(proc.stderr,), daemon=True)
+            stderr_thread.start()
+
             buf = b""
             while True:
-                chunk = proc.stdout.read(8192)
+                chunk = proc.stdout.read(16384) # Buffer un peu plus gros
                 if not chunk:
-                    # rpicam-vid s'est arrêté
                     break
                 buf += chunk
 
@@ -64,18 +71,21 @@ def capture_loop():
                 while True:
                     start = buf.find(b"\xff\xd8")
                     if start == -1:
-                        buf = b""
+                        # Si on ne trouve pas de début, on ne garde rien ou juste la fin (au cas où le début arrive)
+                        if len(buf) > 100: buf = buf[-2:] 
                         break
+                    
                     end = buf.find(b"\xff\xd9", start + 2)
                     if end == -1:
                         buf = buf[start:]   # On garde depuis le début du frame
                         break
+                    
                     frame_data = buf[start : end + 2]
                     buf = buf[end + 2:]
+                    
                     with frame_lock:
                         latest_frame = frame_data
-                    frame_event.set()
-                    frame_event.clear()
+                        frame_lock.notify_all() # Réveille tous les clients en attente
 
             proc.wait()
             print("⚠️ [BRIDGE] rpicam-vid terminé, reconnexion dans 2s ...", flush=True)
@@ -112,12 +122,14 @@ class StreamHandler(BaseHTTPRequestHandler):
         print(f"📡 [BRIDGE] Client connecté : {self.client_address}", flush=True)
         try:
             while True:
-                # Attendre un frame dispo (timeout 5s pour ne pas bloquer éternellement)
-                frame_event.wait(timeout=5.0)
                 with frame_lock:
+                    # Attendre un nouveau frame
+                    frame_lock.wait(timeout=5.0)
                     frame = latest_frame
+                
                 if frame is None:
                     continue
+                    
                 self.wfile.write(
                     b"--frame\r\n"
                     b"Content-Type: image/jpeg\r\n\r\n"
@@ -134,16 +146,22 @@ class StreamHandler(BaseHTTPRequestHandler):
         """Retourne le dernier JPEG capturé — mode pull, zéro buffer."""
         with frame_lock:
             frame = latest_frame
+        
         if frame is None:
-            self.send_response(503)  # Pas encore de frame dispo
+            self.send_response(503)
             self.end_headers()
+            self.wfile.write(b"No frame available")
             return
-        self.send_response(200)
-        self.send_header("Content-Type", "image/jpeg")
-        self.send_header("Content-Length", str(len(frame)))
-        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-        self.end_headers()
-        self.wfile.write(frame)
+
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(frame)))
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.end_headers()
+            self.wfile.write(frame)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def _serve_health(self):
         self.send_response(200)

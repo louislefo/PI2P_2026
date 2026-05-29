@@ -1,8 +1,8 @@
-# Architecture Technique - PI2P 2026
+# 🏗️ Architecture Technique - PI2P 2026
 
 Ce document détaille l'organisation systémique et les flux de communication entre les différents modules du projet.
 
-## Schéma de Communication
+## 📡 Schéma de Communication
 
 Le système est conçu comme une architecture distribuée où le Raspberry Pi gère le matériel (I/O) et le flux vidéo, tandis qu'un serveur (PC ou Pi puissant) gère l'intelligence artificielle.
 
@@ -21,7 +21,7 @@ graph TD
         BTN[Bouton d'Appel] --> HB
     end
 
-    subgraph "Serveur Central (PC/Pi)"
+    subgraph "💻 Serveur Central (PC/Pi)"
         BE[Backend FastAPI<br/>:8000]
         DB[(SQLite<br/>pi2p.db)]
         AI[Moteur Vision<br/>YOLOv8 + EasyOCR]
@@ -30,7 +30,7 @@ graph TD
         BE --- AI
     end
 
-    subgraph "Interface Utilisateur"
+    subgraph " Interface Utilisateur"
         UI[Dashboard React<br/>Port :80]
     end
 
@@ -46,48 +46,12 @@ graph TD
 
 ---
 
-## Structure des Dossiers & Bibliothèques
-
-Voici l'organisation du projet avec les principales bibliothèques utilisées pour chaque service :
-
-```text
-PI2P_2026/
-├── backend/                   # Cerveau (IA & API Centrale)
-│   ├── core/                  # Configuration & Hardware Helpers
-│   ├── data/                  # Base SQLite (pi2p.db) & Images
-│   ├── routers/               # Routes FastAPI (Accès, Système, Flux)
-│   ├── services/              # VisionProcessor (YOLOv8, EasyOCR)
-│   └── requirements.txt       # [fastapi, ultralytics, easyocr, requests]
-│
-├── frontend/                  # Dashboard (React 19)
-│   ├── src/
-│   │   ├── components/        # UI (Vues Dashboard, Logs, Database)
-│   │   ├── routes/            # AppRouter (Navigation)
-│   │   └── App.jsx            # State Central & WebSockets
-│   └── package.json           # [react, vite, tailwindcss, lucide-react]
-│
-├── camera-bridge/             # Streamer Vidéo (CSI & USB)
-│   ├── bridge.py              # Capture CSI (rpicam-vid)
-│   ├── bridge_usb.py          # Capture USB (OpenCV)
-│   └── Dockerfile             # [opencv-python]
-│
-├── hardware-bridge/           # Contrôleur GPIO (Modular)
-│   ├── core/                  # Audio (aplay), Hardware (gpiozero)
-│   ├── routers/               # Servo, Keypad (Digicode), Intercom
-│   └── main.py                # Serveur FastAPI local au Pi
-│
-└── config/                    # Configuration Partagée
-    └── settings.json          # Paramètres IA, Hardware & Modes Barrière
-```
-
----
-
-## Détails des Composants
+## 🧩 Détails des Composants
 
 ### 1. Camera Bridge (`:8081`, `:8082`)
 *   **Rôle** : Isoler la capture hardware du traitement logiciel.
 *   **Techno** : Python, `rpicam-vid` (CSI) ou `OpenCV` (USB).
-*   **Flux** : Expose un endpoint `/latest.jpg` consommé par le Backend et un flux `/stream` (MJPEG) for the Dashboard.
+*   **Flux** : Expose un endpoint `/latest.jpg` consommé par le Backend et un flux `/stream` (MJPEG) pour le Dashboard.
 
 ### 2. Hardware Bridge (`:8083`)
 *   **Rôle** : Abstraction de la couche physique GPIO.
@@ -116,7 +80,7 @@ PI2P_2026/
 
 ---
 
-## Protocoles Utilisés
+## 🔌 Protocoles Utilisés
 
 | Lien | Protocole | Usage |
 | :--- | :--- | :--- |
@@ -125,3 +89,40 @@ PI2P_2026/
 | **Backend ↔ Hardware Bridge** | HTTP REST | Commande de la barrière |
 | **Frontend ↔ Hardware Bridge** | WebSockets | Stream Audio Intercom |
 | **Frontend ↔ Camera Bridge** | MJPEG over HTTP | Flux vidéo direct |
+
+
+---
+
+##  Structure des Dossiers & Bibliothèques
+
+Voici l'organisation du projet avec les principales bibliothèques utilisées pour chaque service :
+
+```text
+ PI2P_2026/
+├── backend/                   # Cerveau (IA & API Centrale)
+│   ├── core/                  # Configuration & Hardware Helpers
+│   ├── data/                  # Base SQLite (pi2p.db) & Images
+│   ├── routers/               # Routes FastAPI (Accès, Système, Flux)
+│   ├── services/              # VisionProcessor (YOLOv8, EasyOCR)
+│   └── requirements.txt       # [fastapi, ultralytics, easyocr, requests]
+│
+├── frontend/                  # Dashboard (React 19)
+│   ├── src/
+│   │   ├── components/        # UI (Vues Dashboard, Logs, Database)
+│   │   ├── routes/            # AppRouter (Navigation)
+│   │   └── App.jsx            # State Central & WebSockets
+│   └── package.json           # [react, vite, tailwindcss, lucide-react]
+│
+├── camera-bridge/             # Streamer Vidéo (CSI & USB)
+│   ├── bridge.py              # Capture CSI (rpicam-vid)
+│   ├── bridge_usb.py          # Capture USB (OpenCV)
+│   └── Dockerfile             # [opencv-python]
+│
+├── hardware-bridge/           # Contrôleur GPIO (Modular)
+│   ├── core/                  # Audio (aplay), Hardware (gpiozero)
+│   ├── routers/               # Servo, Keypad (Digicode), Intercom
+│   └── main.py                # Serveur FastAPI local au Pi
+│
+└── config/                    # Configuration Partagée
+    └── settings.json          # Paramètres IA, Hardware & Modes Barrière
+```

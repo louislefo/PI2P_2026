@@ -360,3 +360,4 @@ __marimo__/
 # Louis
 tele.py
 /.agents
+/backend/data/debug_ocr
